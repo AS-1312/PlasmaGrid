@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useChainId } from "wagmi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,31 +11,29 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Network } from "lucide-react"
 import { useTradingStore } from "@/lib/trading-store"
 import { TelegramPanel } from "./telegram-panel"
 import { WalletConnection } from "./wallet-connection"
+import { TokenSelect } from "@/components/ui/token-select"
+import { SUPPORTED_CHAINS, SupportedChain } from "@/lib/oneinch-api"
 
 export function ConfigurationPanel() {
-  const [selectedNetwork, setSelectedNetwork] = useState("ethereum")
+  const chainId = useChainId()
   const [gridLevels, setGridLevels] = useState([20])
   const [stopLoss, setStopLoss] = useState(false)
   const [takeProfit, setTakeProfit] = useState(false)
 
   const { currentPrice, baseAsset, quoteAsset, setBaseAsset, setQuoteAsset } = useTradingStore()
 
-  const networks = [
-    { value: "ethereum", label: "Ethereum" },
-    { value: "polygon", label: "Polygon" },
-    { value: "bsc", label: "BSC" },
-    { value: "arbitrum", label: "Arbitrum" },
-  ]
+  // Map chainId to SupportedChain
+  const getNetworkFromChainId = (chainId: number): SupportedChain => {
+    const chainEntry = Object.entries(SUPPORTED_CHAINS).find(([_, id]) => id === chainId)
+    return (chainEntry?.[0] as SupportedChain) || "ethereum"
+  }
 
-  const popularTokens = [
-    { symbol: "ETH", name: "Ethereum", price: 2340.5 },
-    { symbol: "USDT", name: "Tether", price: 1.0 },
-    { symbol: "1INCH", name: "1inch", price: 0.45 },
-    { symbol: "BTC", name: "Bitcoin", price: 43250.0 },
-  ]
+  const currentNetwork = getNetworkFromChainId(chainId)
+  const currentChainId = SUPPORTED_CHAINS[currentNetwork]
 
   return (
     <div className="space-y-6">
@@ -42,57 +41,45 @@ export function ConfigurationPanel() {
       <WalletConnection />
 
       {/* Trading Pair Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Trading Pair Configuration</CardTitle>
+      <Card className="shadow-sm border">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center justify-between">
+            <span>Trading Pair Configuration</span>
+            <Badge variant="outline" className="flex items-center space-x-1 text-sm">
+              <Network className="h-3 w-3" />
+              <span>{currentNetwork.charAt(0).toUpperCase() + currentNetwork.slice(1)}</span>
+            </Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Base Asset</Label>
-              <Select value={baseAsset} onValueChange={setBaseAsset}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {popularTokens.map((token) => (
-                    <SelectItem key={token.symbol} value={token.symbol}>
-                      <div className="flex items-center space-x-2">
-                        <span>{token.symbol}</span>
-                        <span className="text-sm text-muted-foreground">{token.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <TokenSelect 
+                value={baseAsset} 
+                onValueChange={setBaseAsset}
+                chainId={currentChainId}
+                placeholder="Select base token..."
+              />
             </div>
 
             <div className="space-y-2">
               <Label>Quote Asset</Label>
-              <Select value={quoteAsset} onValueChange={setQuoteAsset}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {popularTokens.map((token) => (
-                    <SelectItem key={token.symbol} value={token.symbol}>
-                      <div className="flex items-center space-x-2">
-                        <span>{token.symbol}</span>
-                        <span className="text-sm text-muted-foreground">{token.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <TokenSelect 
+                value={quoteAsset} 
+                onValueChange={setQuoteAsset}
+                chainId={currentChainId}
+                placeholder="Select quote token..."
+              />
             </div>
           </div>
 
-          <div className="p-3 bg-muted rounded-lg">
+          <div className="p-4 bg-muted/50 border rounded-lg">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium">
                 {baseAsset}/{quoteAsset}
               </span>
-              <Badge variant="outline" className="text-green-600">
+              <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
                 +2.34%
               </Badge>
             </div>
@@ -103,8 +90,8 @@ export function ConfigurationPanel() {
       </Card>
 
       {/* Range Strategy Settings */}
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm border">
+        <CardHeader className="pb-4">
           <CardTitle>Range Strategy Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -120,14 +107,27 @@ export function ConfigurationPanel() {
               </div>
             </div>
 
-            <div className="p-3 bg-muted rounded-lg text-center">
+            <div className="p-4 bg-muted/50 border rounded-lg text-center">
               <div className="text-sm text-muted-foreground">Current Price</div>
               <div className="text-lg font-bold">${currentPrice.toLocaleString()}</div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Grid Levels: {gridLevels[0]}</Label>
-              <Slider value={gridLevels} onValueChange={setGridLevels} max={50} min={5} step={1} className="w-full" />
+            <div className="space-y-3 p-3 border rounded-lg bg-muted/30 slider-container">
+              <Label className="text-sm font-medium">Grid Levels: {gridLevels[0]}</Label>
+              <div className="px-2">
+                <Slider 
+                  value={gridLevels} 
+                  onValueChange={setGridLevels} 
+                  max={50} 
+                  min={5} 
+                  step={1} 
+                  className="w-full" 
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground px-2">
+                <span>Min: 5</span>
+                <span>Max: 50</span>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -135,7 +135,7 @@ export function ConfigurationPanel() {
               <Input type="number" placeholder="100" />
               <div className="flex space-x-2">
                 {[25, 50, 75, 100].map((percent) => (
-                  <Button key={percent} variant="outline" size="sm" className="flex-1 bg-transparent">
+                  <Button key={percent} variant="outline" size="sm" className="flex-1">
                     {percent}%
                   </Button>
                 ))}
@@ -163,8 +163,8 @@ export function ConfigurationPanel() {
       </Card>
 
       {/* Risk Management */}
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm border">
+        <CardHeader className="pb-4">
           <CardTitle>Risk Management</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -172,7 +172,12 @@ export function ConfigurationPanel() {
             <Label htmlFor="stop-loss">Stop Loss</Label>
             <Switch id="stop-loss" checked={stopLoss} onCheckedChange={setStopLoss} />
           </div>
-          {stopLoss && <Input type="number" placeholder="5" suffix="%" />}
+          {stopLoss && (
+            <div className="pl-4 pt-2 flex items-center space-x-2">
+              <Input type="number" placeholder="5" className="flex-1" />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
+          )}
 
           <Separator />
 
@@ -180,7 +185,12 @@ export function ConfigurationPanel() {
             <Label htmlFor="take-profit">Take Profit</Label>
             <Switch id="take-profit" checked={takeProfit} onCheckedChange={setTakeProfit} />
           </div>
-          {takeProfit && <Input type="number" placeholder="10" suffix="%" />}
+          {takeProfit && (
+            <div className="pl-4 pt-2 flex items-center space-x-2">
+              <Input type="number" placeholder="10" className="flex-1" />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
+          )}
 
           <Separator />
 
