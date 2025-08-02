@@ -57,6 +57,11 @@ interface TradingStore {
   filledOrders: number
   pendingOrders: number
   totalPnL: number
+  
+  // Grid Orders (from 1inch)
+  gridOrders: any[]
+  gridOrdersLoading: boolean
+  gridOrdersError: string | null
 
   // Actions
   setBotStatus: (status: "running" | "paused" | "stopped") => void
@@ -75,6 +80,9 @@ interface TradingStore {
   getHotWalletBalance: (tokenAddress: string) => string
   createLimitOrdersFromSuggestions: () => void
   signAndSubmitOrders: (chainId: number, walletAddress?: string) => Promise<void>
+  
+  // Grid Orders Actions
+  fetchGridOrders: (chainId: number) => Promise<void>
 }
 
 // Mock orders data
@@ -167,6 +175,11 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   filledOrders: mockOrders.filter((o) => o.status === "filled").length,
   pendingOrders: mockOrders.filter((o) => o.status === "pending").length,
   totalPnL: 234.56,
+  
+  // Grid Orders (from 1inch)
+  gridOrders: [],
+  gridOrdersLoading: false,
+  gridOrdersError: null,
 
   // Actions
   setBotStatus: (status) => set({ botStatus: status }),
@@ -555,6 +568,42 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   getHotWalletBalance: (tokenAddress: string) => {
     const state = get()
     return state.hotWalletBalances[tokenAddress] || '0'
+  },
+
+  // Fetch grid orders from 1inch by hot wallet maker address
+  fetchGridOrders: async (chainId: number) => {
+    const state = get()
+    if (!state.hotWallet) {
+      console.log('No hot wallet available, cannot fetch grid orders')
+      return
+    }
+
+    set({ gridOrdersLoading: true, gridOrdersError: null })
+
+    try {
+      console.log(`Fetching grid orders for hot wallet ${state.hotWallet.address} on chain ${chainId}`)
+      
+      const orders = await limitOrderService.fetchOrdersByMaker(
+        state.hotWallet.address, 
+        chainId, 
+        state.currentPrice // Pass current price for better mock data
+      )
+      
+      console.log(`Fetched ${orders.length} grid orders`)
+      
+      set({ 
+        gridOrders: orders,
+        gridOrdersLoading: false,
+        gridOrdersError: null
+      })
+      
+    } catch (error) {
+      console.error('Error fetching grid orders:', error)
+      set({ 
+        gridOrdersLoading: false,
+        gridOrdersError: error instanceof Error ? error.message : 'Failed to fetch grid orders'
+      })
+    }
   }
 }))
 

@@ -185,6 +185,155 @@ export class LimitOrderService {
   }
 
   /**
+   * Fetch limit orders by maker address from 1inch API
+   */
+  async fetchOrdersByMaker(makerAddress: string, chainId: number, currentPrice?: number): Promise<any[]> {
+    try {
+      console.log(`Fetching orders for maker ${makerAddress} on chain ${chainId}`)
+      
+      // Build API URL with current price for better mock data
+      const priceParam = currentPrice ? `&currentPrice=${currentPrice}` : ''
+      const apiUrl = `/api/orders?maker=${makerAddress}&chainId=${chainId}${priceParam}`
+      
+      // Call our API route which handles the 1inch API call server-side
+      const response = await fetch(apiUrl)
+      
+      if (!response.ok) {
+        console.error(`Orders API error: ${response.status} ${response.statusText}`)
+        return this.getMockOrders(makerAddress)
+      }
+      
+      const data = await response.json()
+      
+      if (!data.success) {
+        console.error('Orders API returned error:', data.error)
+        return this.getMockOrders(makerAddress)
+      }
+      
+      console.log(`Fetched ${data.orders.length} orders (source: ${data.source})`)
+      return data.orders
+      
+    } catch (error) {
+      console.error('Error fetching orders via API:', error)
+      return this.getMockOrders(makerAddress)
+    }
+  }
+
+  /**
+   * Generate mock orders when API is unavailable
+   */
+  private getMockOrders(makerAddress: string): any[] {
+    return [
+      {
+        orderHash: '0x' + Math.random().toString(16).substr(2, 40),
+        signature: '0x' + Math.random().toString(16).substr(2, 130),
+        data: {
+          maker: makerAddress,
+          makerAsset: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270', // WPOL on Polygon
+          takerAsset: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', // USDT on Polygon
+          makingAmount: ethers.parseUnits('0.1', 18).toString(),
+          takingAmount: ethers.parseUnits('234.5', 6).toString(),
+          salt: randBigInt(32).toString(),
+        },
+        status: Math.random() > 0.5 ? 'pending' : 'filled',
+        createdAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
+        price: 2345,
+        amount: 0.1,
+        type: 'sell' as const
+      },
+      {
+        orderHash: '0x' + Math.random().toString(16).substr(2, 40),
+        signature: '0x' + Math.random().toString(16).substr(2, 130),
+        data: {
+          maker: makerAddress,
+          makerAsset: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', // USDT on Polygon  
+          takerAsset: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270', // WPOL on Polygon
+          makingAmount: ethers.parseUnits('232.0', 6).toString(),
+          takingAmount: ethers.parseUnits('0.1', 18).toString(),
+          salt: randBigInt(32).toString(),
+        },
+        status: Math.random() > 0.5 ? 'pending' : 'filled',
+        createdAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
+        price: 2320,
+        amount: 0.1,
+        type: 'buy' as const
+      }
+    ]
+  }
+
+  /**
+   * Map 1inch order status to our format
+   */
+  private mapOrderStatus(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'active':
+      case 'open':
+        return 'pending'
+      case 'filled':
+      case 'executed':
+        return 'filled'
+      case 'cancelled':
+      case 'canceled':
+        return 'cancelled'
+      default:
+        return 'pending'
+    }
+  }
+
+  /**
+   * Check if token address is a base token (simplified for now)
+   */
+  private isBaseToken(tokenAddress: string, chainId: number): boolean {
+    const baseTokens: Record<number, string[]> = {
+      1: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'], // WETH on Ethereum
+      137: ['0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270'], // WPOL on Polygon
+      56: ['0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'], // WBNB on BSC
+    }
+    
+    return baseTokens[chainId]?.includes(tokenAddress.toLowerCase()) || false
+  }
+
+  /**
+   * Calculate order price from amounts
+   */
+  private calculateOrderPrice(makingAmount: bigint, takingAmount: bigint, isSellingBase: boolean, chainId: number): number {
+    try {
+      if (isSellingBase) {
+        // Selling base for quote: price = takingAmount / makingAmount
+        const making = ethers.formatUnits(makingAmount, 18) // Base token usually 18 decimals
+        const taking = ethers.formatUnits(takingAmount, 6)   // Quote token usually 6 decimals (USDT/USDC)
+        return parseFloat(taking) / parseFloat(making)
+      } else {
+        // Buying base with quote: price = makingAmount / takingAmount  
+        const making = ethers.formatUnits(makingAmount, 6)   // Quote token usually 6 decimals
+        const taking = ethers.formatUnits(takingAmount, 18)  // Base token usually 18 decimals
+        return parseFloat(making) / parseFloat(taking)
+      }
+    } catch (error) {
+      console.warn('Error calculating order price:', error)
+      return 0
+    }
+  }
+
+  /**
+   * Calculate order amount from amounts
+   */
+  private calculateOrderAmount(makingAmount: bigint, takingAmount: bigint, isSellingBase: boolean, chainId: number): number {
+    try {
+      if (isSellingBase) {
+        // Amount is the base token being sold
+        return parseFloat(ethers.formatUnits(makingAmount, 18))
+      } else {
+        // Amount is the base token being bought
+        return parseFloat(ethers.formatUnits(takingAmount, 18))
+      }
+    } catch (error) {
+      console.warn('Error calculating order amount:', error)
+      return 0
+    }
+  }
+
+  /**
    * Submit limit order to 1inch API (placeholder - needs API key and implementation)
    */
   async submitLimitOrder(order: LimitOrder, signature: string, chainId: number): Promise<void> {

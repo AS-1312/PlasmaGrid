@@ -5,6 +5,18 @@ import { parseUnits, formatUnits } from 'viem'
 // Note: 1inch SDK integration will be added when we have proper wallet connection
 // For now, we'll prepare the orders and show the user what needs to be signed
 
+export interface Order {
+  id: string
+  price: number
+  amount: number
+  side: 'buy' | 'sell'
+  status: string
+  makerAsset: string
+  takerAsset: string
+  maker: string
+  createdAt?: string
+}
+
 export interface GridTrade {
   type: 'buy' | 'sell'
   price: number
@@ -92,6 +104,71 @@ export function validateOrderBalance(
   }
 
   return { valid: true }
+}
+
+/**
+ * Fetch orders by maker address from 1inch API
+ */
+export async function fetchOrdersByMaker(makerAddress: string, currentPrice?: number): Promise<Order[]> {
+  try {
+    console.log('🔍 Fetching orders for maker:', makerAddress, 'currentPrice:', currentPrice)
+    
+    const params = new URLSearchParams({
+      maker: makerAddress,
+      limit: '50', // Increased limit for more orders
+      statuses: '1', // Only active orders
+    })
+    
+    if (currentPrice) {
+      params.append('currentPrice', currentPrice.toString())
+    }
+    
+    const response = await fetch(`/api/orders?${params.toString()}`)
+    
+    if (!response.ok) {
+      console.error('❌ API response not ok:', response.status, response.statusText)
+      const errorText = await response.text()
+      console.error('❌ Error response body:', errorText)
+      throw new Error(`Failed to fetch orders: ${response.status} ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    console.log('✅ Orders API response:', {
+      status: data.status,
+      ordersCount: data.orders?.length || 0,
+      hasErrors: !!data.error,
+      source: data.source || 'unknown'
+    })
+    
+    if (data.error) {
+      console.error('❌ API returned error:', data.error)
+      throw new Error(data.error)
+    }
+    
+    if (!data.orders || !Array.isArray(data.orders)) {
+      console.warn('⚠️ No orders in response or invalid format')
+      return []
+    }
+    
+    console.log('✅ Successfully fetched', data.orders.length, 'orders from', data.source || '1inch API')
+    
+    // Log first few orders for debugging
+    if (data.orders.length > 0) {
+      console.log('📋 Sample orders:', data.orders.slice(0, 2).map((order: any) => ({
+        id: order.id,
+        price: order.price,
+        amount: order.amount,
+        side: order.side,
+        status: order.status
+      })))
+    }
+    
+    return data.orders
+    
+  } catch (error) {
+    console.error('❌ Error in fetchOrdersByMaker:', error)
+    throw error // Re-throw to let the caller handle it
+  }
 }
 
 /**

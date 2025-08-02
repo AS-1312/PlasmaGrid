@@ -42,13 +42,17 @@ export function ConfigurationPanel() {
     limitOrdersError,
     signingOrders,
     submittingOrders,
+    gridOrders,
+    gridOrdersLoading,
+    hotWallet,
     setBaseAsset, 
     setQuoteAsset,
     tryFetchPrice,
     loadTokens,
     getSuggestedTrades,
     createLimitOrdersFromSuggestions,
-    signAndSubmitOrders
+    signAndSubmitOrders,
+    fetchGridOrders
   } = useTradingStore()
 
   // Custom handlers that trigger price fetching with current chainId
@@ -172,6 +176,14 @@ export function ConfigurationPanel() {
     }
   }, [currentPrice, priceLoading, priceError])
 
+  // Fetch grid orders when hot wallet is available and chain/assets change
+  useEffect(() => {
+    if (hotWallet && currentChainId && baseAsset && quoteAsset) {
+      console.log(`Auto-fetching grid orders for ${baseAsset}/${quoteAsset} on chain ${currentChainId}`)
+      fetchGridOrders(currentChainId)
+    }
+  }, [hotWallet, currentChainId, baseAsset, quoteAsset, fetchGridOrders])
+
   return (
     <div className="space-y-6">
       {/* Wallet & API Settings */}
@@ -241,7 +253,20 @@ export function ConfigurationPanel() {
               ) : priceError ? (
                 <span className="text-red-500">{priceError}</span>
               ) : (
-                "Real-time price from 1inch"
+                <div className="flex items-center justify-between">
+                  <span>Real-time price from 1inch</span>
+                  {hotWallet && (
+                    <span className="text-xs">
+                      {gridOrdersLoading ? (
+                        <span className="text-blue-500">Loading orders...</span>
+                      ) : (
+                        <span className="text-green-600">
+                          {gridOrders.length} active orders
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
