@@ -54,14 +54,17 @@ export function TokenSelect({
       try {
         setLoading(true)
         setError(null)
+        console.log(`TokenSelect: Loading tokens for chainId ${chainId}`)
         const fetchedTokens = await fetchWhitelistedTokens(chainId)
+        console.log(`TokenSelect: Successfully loaded ${fetchedTokens.length} tokens`)
         setTokens(fetchedTokens)
       } catch (err) {
-        console.error('Failed to load tokens from API, using fallback:', err)
+        console.error('TokenSelect: Failed to load tokens from API, using fallback:', err)
         // Use fallback tokens when API fails
         const fallbackTokens = FALLBACK_TOKENS[chainId] || FALLBACK_TOKENS[1] || []
         setTokens(fallbackTokens)
-        setError('Using limited token list (API unavailable)')
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        setError(`API Error: ${errorMessage}. Using limited token list.`)
       } finally {
         setLoading(false)
       }

@@ -1,4 +1,4 @@
-# GridPlasma
+# PlasmaGrid
 
 ### LLM Based - Grid Bot Strategy
 We utilize 1inch's limit order api's to create a grid bot strategy that is powered by LLMs. The bot is designed to execute trades based on the current market conditions and user-defined parameters.   

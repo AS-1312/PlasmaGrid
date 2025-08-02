@@ -53,19 +53,40 @@ export type SupportedChain = keyof typeof SUPPORTED_CHAINS
  */
 export async function fetchWhitelistedTokens(chainId: number): Promise<OneInchToken[]> {
   try {
+    console.log(`Fetching tokens for chainId: ${chainId}`)
     const response = await fetch(`/api/tokens?chainId=${chainId}`)
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch tokens: ${response.status}`)
+      const errorText = await response.text()
+      console.error(`API error: ${response.status} ${response.statusText}`, errorText)
+      throw new Error(`Failed to fetch tokens: ${response.status} - ${errorText}`)
     }
     
-    const data: OneInchTokensResponse = await response.json()
+    const data = await response.json()
+    console.log('API response data:', data)
+    
+    // Check if data is directly the tokens object (not wrapped in a tokens property)
+    let tokensObject: Record<string, OneInchToken>
+    
+    if (data.tokens && typeof data.tokens === 'object') {
+      // Standard format: { tokens: { address: tokenData } }
+      tokensObject = data.tokens
+    } else if (typeof data === 'object' && data !== null) {
+      // Direct format: { address: tokenData }
+      tokensObject = data
+    } else {
+      console.error('Invalid API response structure:', data)
+      throw new Error(`No tokens found in API response. Got: ${JSON.stringify(data)}`)
+    }
     
     // Convert the tokens object to an array
-    return Object.entries(data.tokens).map(([address, token]) => ({
+    const tokenArray = Object.entries(tokensObject).map(([address, token]) => ({
       ...token,
       address,
     }))
+    
+    console.log(`Successfully fetched ${tokenArray.length} tokens for chain ${chainId}`)
+    return tokenArray
   } catch (error) {
     console.error('Error fetching 1inch tokens:', error)
     throw error

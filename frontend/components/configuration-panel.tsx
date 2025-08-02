@@ -55,17 +55,17 @@ export function ConfigurationPanel() {
   const handleBaseAssetChange = (asset: string) => {
     setBaseAsset(asset)
     if (quoteAsset && asset !== quoteAsset) {
-      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${chainId}`)
-      tryFetchPrice(chainId)
+      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${currentChainId}`)
+      tryFetchPrice(currentChainId)
     }
   }
 
   const handleQuoteAssetChange = (asset: string) => {
     setQuoteAsset(asset)
     if (baseAsset && asset !== baseAsset) {
-      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${chainId}`)
+      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${currentChainId}`)
 
-      tryFetchPrice(chainId)
+      tryFetchPrice(currentChainId)
     }
   }
 
@@ -81,15 +81,15 @@ export function ConfigurationPanel() {
 
   // Load tokens when component mounts or chain changes
   useEffect(() => {
-    loadTokens(chainId)
-  }, [chainId, loadTokens])
+    loadTokens(currentChainId)
+  }, [currentChainId, loadTokens])
 
   // Fetch real price when assets change or chain changes
   useEffect(() => {
     if (baseAsset && quoteAsset && baseAsset !== quoteAsset) {
-      tryFetchPrice(chainId)
+      tryFetchPrice(currentChainId)
     }
-  }, [baseAsset, quoteAsset, chainId, tryFetchPrice])
+  }, [baseAsset, quoteAsset, currentChainId, tryFetchPrice])
 
   // Update min/max prices based on current price (±5% range)
   useEffect(() => {
@@ -118,25 +118,30 @@ export function ConfigurationPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row gap-4 w-full">
+            <div className="flex-1 min-w-0 flex flex-col space-y-2">
               <Label>Base Asset</Label>
-              <TokenSelect 
-                value={baseAsset} 
-                onValueChange={handleBaseAssetChange}
-                chainId={currentChainId}
-                placeholder="Select base token..."
-              />
+              <div className="w-full overflow-hidden">
+                <TokenSelect 
+                  value={baseAsset} 
+                  onValueChange={handleBaseAssetChange}
+                  chainId={currentChainId}
+                  placeholder="Select base token..."
+                  className="w-full min-w-0 truncate"
+                />
+              </div>
             </div>
-
-            <div className="space-y-2">
+            <div className="flex-1 min-w-0 flex flex-col space-y-2">
               <Label>Quote Asset</Label>
-              <TokenSelect 
-                value={quoteAsset} 
-                onValueChange={handleQuoteAssetChange}
-                chainId={currentChainId}
-                placeholder="Select quote token..."
-              />
+              <div className="w-full overflow-hidden">
+                <TokenSelect 
+                  value={quoteAsset} 
+                  onValueChange={handleQuoteAssetChange}
+                  chainId={currentChainId}
+                  placeholder="Select quote token..."
+                  className="w-full min-w-0 truncate"
+                />
+              </div>
             </div>
           </div>
 
@@ -199,10 +204,11 @@ export function ConfigurationPanel() {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full">
               <Button 
                 variant="outline" 
                 size="sm"
+                className="flex-1 h-10"
                 onClick={() => {
                   if (currentPrice && !priceLoading && !priceError) {
                     setMinPrice((currentPrice * 0.95).toFixed(2))
@@ -216,6 +222,7 @@ export function ConfigurationPanel() {
               <Button 
                 variant="default" 
                 size="sm"
+                className="flex-1 h-10"
                 onClick={getSuggestedTrades}
                 disabled={!currentPrice || priceLoading || !!priceError || suggestionsLoading}
               >
