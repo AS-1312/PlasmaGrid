@@ -15,6 +15,7 @@ import { Network } from "lucide-react"
 import { useTradingStore } from "@/lib/trading-store"
 // import { TelegramPanel } from "./telegram-panel"
 import { WalletConnection } from "./wallet-connection"
+import { HotWalletPanel } from "./hot-wallet-panel"
 import { TokenSelect } from "@/components/ui/token-select"
 import { SUPPORTED_CHAINS, SupportedChain } from "@/lib/oneinch-api"
 
@@ -22,8 +23,6 @@ export function ConfigurationPanel() {
   const chainId = useChainId()
   const { address: walletAddress } = useAccount()
   const [gridLevels, setGridLevels] = useState([20])
-  const [stopLoss, setStopLoss] = useState(false)
-  const [takeProfit, setTakeProfit] = useState(false)
   const [minPrice, setMinPrice] = useState<string>("")
   const [maxPrice, setMaxPrice] = useState<string>("")
 
@@ -33,6 +32,7 @@ export function ConfigurationPanel() {
     quoteAsset, 
     priceLoading,
     priceError,
+    tokens,
     tokensLoading,
     suggestionsLoading,
     suggestionsError,
@@ -73,23 +73,94 @@ export function ConfigurationPanel() {
   const getNetworkFromChainId = (chainId: number): SupportedChain => {
     const chainEntry = Object.entries(SUPPORTED_CHAINS).find(([_, id]) => id === chainId)
     
-    return (chainEntry?.[0] as SupportedChain) || "ethereum"
+    if (chainEntry) {
+      return chainEntry[0] as SupportedChain
+    }
+    
+    // If chainId is not in SUPPORTED_CHAINS, log it and try to use a fallback
+    console.warn(`Chain ID ${chainId} not found in SUPPORTED_CHAINS, available chains:`, SUPPORTED_CHAINS)
+    
+    // Return a fallback based on common chainIds
+    switch (chainId) {
+      case 137: return "polygon"
+      case 1: return "ethereum"
+      case 56: return "bsc"
+      case 42161: return "arbitrum"
+      case 10: return "optimism"
+      case 43114: return "avalanche"
+      case 8453: return "base"
+      default: 
+        console.error(`Unsupported chain ID: ${chainId}, falling back to ethereum`)
+        return "ethereum"
+    }
   }
 
   const currentNetwork = getNetworkFromChainId(chainId)
-  const currentChainId = SUPPORTED_CHAINS[currentNetwork]
+  // Use the actual chainId from wagmi instead of mapping back through SUPPORTED_CHAINS
+  const currentChainId = chainId
+
+  // Debug logging
+  console.log('Configuration Panel Debug:', {
+    walletChainId: chainId,
+    mappedNetwork: currentNetwork,
+    finalChainId: currentChainId,
+    availableChains: SUPPORTED_CHAINS
+  })
 
   // Load tokens when component mounts or chain changes
   useEffect(() => {
     loadTokens(currentChainId)
   }, [currentChainId, loadTokens])
 
+  // Reset assets and set defaults when chain changes and tokens are loaded
+  useEffect(() => {
+    if (tokens.length > 0) {
+      // Check if current assets exist in new token list
+      const baseExists = tokens.find(t => t.symbol.toLowerCase() === baseAsset.toLowerCase())
+      const quoteExists = tokens.find(t => t.symbol.toLowerCase() === quoteAsset.toLowerCase())
+      
+      // If current assets don't exist on this chain, set defaults
+      if (!baseExists || !quoteExists) {
+        // Set default assets based on available tokens
+        const wethToken = tokens.find(t => t.symbol.toLowerCase() === 'weth' || t.symbol.toLowerCase() === 'eth')
+        const usdtToken = tokens.find(t => t.symbol.toLowerCase() === 'usdt')
+        const usdcToken = tokens.find(t => t.symbol.toLowerCase() === 'usdc')
+        const wpolToken = tokens.find(t => t.symbol.toLowerCase() === 'wpol' || t.symbol.toLowerCase() === 'pol')
+        const wmaticToken = tokens.find(t => t.symbol.toLowerCase() === 'wmatic' || t.symbol.toLowerCase() === 'matic')
+        
+        // Choose appropriate defaults based on available tokens and chain
+        let newBaseAsset = ""
+        let newQuoteAsset = ""
+        
+        if (currentChainId === 137) { // Polygon
+          newBaseAsset = wpolToken?.symbol || wmaticToken?.symbol || wethToken?.symbol || tokens[0]?.symbol || ""
+        } else {
+          newBaseAsset = wethToken?.symbol || tokens[0]?.symbol || ""
+        }
+        
+        newQuoteAsset = usdtToken?.symbol || usdcToken?.symbol || tokens[1]?.symbol || ""
+        
+        if (newBaseAsset && newQuoteAsset && newBaseAsset !== newQuoteAsset) {
+          console.log(`Switching to chain ${currentChainId}, setting assets: ${newBaseAsset}/${newQuoteAsset}`)
+          setBaseAsset(newBaseAsset)
+          setQuoteAsset(newQuoteAsset)
+        }
+      }
+    }
+  }, [tokens, currentChainId, baseAsset, quoteAsset, setBaseAsset, setQuoteAsset])
+
   // Fetch real price when assets change or chain changes
   useEffect(() => {
-    if (baseAsset && quoteAsset && baseAsset !== quoteAsset) {
-      tryFetchPrice(currentChainId)
+    if (baseAsset && quoteAsset && baseAsset !== quoteAsset && tokens.length > 0) {
+      // Ensure the assets exist on the current chain before fetching price
+      const baseExists = tokens.find(t => t.symbol.toLowerCase() === baseAsset.toLowerCase())
+      const quoteExists = tokens.find(t => t.symbol.toLowerCase() === quoteAsset.toLowerCase())
+      
+      if (baseExists && quoteExists) {
+        tryFetchPrice(currentChainId)
+      }
     }
-  }, [baseAsset, quoteAsset, currentChainId, tryFetchPrice])
+  }, [baseAsset, quoteAsset, currentChainId, tokens, tryFetchPrice])
 
   // Update min/max prices based on current price (±5% range)
   useEffect(() => {
@@ -105,6 +176,9 @@ export function ConfigurationPanel() {
     <div className="space-y-6">
       {/* Wallet & API Settings */}
       <WalletConnection />
+
+      {/* Hot Wallet Panel */}
+      <HotWalletPanel />
 
       {/* Trading Pair Configuration */}
       <Card className="shadow-sm border">
@@ -400,45 +474,6 @@ export function ConfigurationPanel() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Risk Management */}
-      <Card className="shadow-sm border">
-        <CardHeader className="pb-4">
-          <CardTitle>Risk Management</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="stop-loss">Stop Loss</Label>
-            <Switch id="stop-loss" checked={stopLoss} onCheckedChange={setStopLoss} />
-          </div>
-          {stopLoss && (
-            <div className="pl-4 pt-2 flex items-center space-x-2">
-              <Input type="number" placeholder="5" className="flex-1" />
-              <span className="text-sm text-muted-foreground">%</span>
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="take-profit">Take Profit</Label>
-            <Switch id="take-profit" checked={takeProfit} onCheckedChange={setTakeProfit} />
-          </div>
-          {takeProfit && (
-            <div className="pl-4 pt-2 flex items-center space-x-2">
-              <Input type="number" placeholder="10" className="flex-1" />
-              <span className="text-sm text-muted-foreground">%</span>
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="space-y-2">
-            <Label>Max Concurrent Orders</Label>
-            <Input type="number" placeholder="20" />
           </div>
         </CardContent>
       </Card>

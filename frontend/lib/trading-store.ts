@@ -3,6 +3,7 @@
 import { create } from "zustand"
 import { getCurrentPrice, fetchWhitelistedTokens, OneInchToken, SUPPORTED_CHAINS, getPriceQuote } from "./oneinch-api"
 import { LimitOrder, convertGridTradesToLimitOrders, calculateTotalBuyValue, calculateTotalSellAmount, OneInchOrderManager, submitLimitOrdersToOneInch } from "./limit-orders"
+import { hotWalletManager, HotWallet } from "./hot-wallet"
 
 interface Order {
   id: string
@@ -17,6 +18,13 @@ interface TradingStore {
   // Connection & Status
   botStatus: "running" | "paused" | "stopped"
   uptime: string
+
+  // Hot Wallet
+  hotWallet: HotWallet | null
+  hotWalletBalances: Record<string, string>
+  balancesLoading: boolean
+  fundingInProgress: boolean
+  fundingError: string | null
 
   // Trading Pair
   baseAsset: string
@@ -59,6 +67,12 @@ interface TradingStore {
   loadTokens: (chainId: number) => Promise<void>
   tryFetchPrice: (chainId: number) => Promise<void>
   getSuggestedTrades: () => Promise<void>
+  
+  // Hot Wallet Actions
+  initializeHotWallet: () => void
+  fundHotWallet: (tokenAddress: string, amount: string, userSigner: any) => Promise<void>
+  refreshHotWalletBalances: (chainId: number) => Promise<void>
+  getHotWalletBalance: (tokenAddress: string) => string
   createLimitOrdersFromSuggestions: () => void
   signAndSubmitOrders: (chainId: number, walletAddress?: string) => Promise<void>
 }
@@ -123,6 +137,14 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   // Initial state
   botStatus: "stopped",
   uptime: "02:34:12",
+  
+  // Hot Wallet
+  hotWallet: null,
+  hotWalletBalances: {},
+  balancesLoading: false,
+  fundingInProgress: false,
+  fundingError: null,
+  
   baseAsset: "ETH",
   quoteAsset: "USDT",
   currentPrice: 3340.5,
@@ -412,6 +434,134 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
         limitOrdersError: error instanceof Error ? error.message : 'Failed to sign and submit orders'
       })
     }
+  },
+
+  // Hot Wallet Actions
+  initializeHotWallet: () => {
+    try {
+      let wallet = hotWalletManager.getWallet()
+      if (!wallet) {
+        wallet = hotWalletManager.generateWallet()
+      }
+      set({ hotWallet: wallet })
+    } catch (error) {
+      console.error('Failed to initialize hot wallet:', error)
+    }
+  },
+
+  fundHotWallet: async (tokenAddress: string, amount: string, userSigner: any) => {
+    try {
+      set({ fundingInProgress: true, fundingError: null })
+      
+      const state = get()
+      if (!state.hotWallet) {
+        throw new Error('Hot wallet not initialized')
+      }
+
+      const txHash = await hotWalletManager.fundFromUserWallet(
+        tokenAddress,
+        amount,
+        userSigner.address,
+        userSigner
+      )
+
+      console.log('Funding transaction hash:', txHash)
+      
+      // Refresh balances after funding
+      const { tokens } = state
+      const chainId = 137 // Default to Polygon, should be passed as parameter
+      await get().refreshHotWalletBalances(chainId)
+      
+      set({ fundingInProgress: false })
+    } catch (error) {
+      console.error('Failed to fund hot wallet:', error)
+      set({ 
+        fundingInProgress: false,
+        fundingError: error instanceof Error ? error.message : 'Failed to fund hot wallet'
+      })
+    }
+  },
+
+  refreshHotWalletBalances: async (chainId: number) => {
+    try {
+      set({ balancesLoading: true })
+      
+      const state = get()
+      const { hotWallet, baseTokenData, quoteTokenData } = state
+      
+      if (!hotWallet) {
+        set({ balancesLoading: false })
+        return
+      }
+
+      const balances: Record<string, string> = {}
+      
+      // Fetch fresh tokens for the current chain
+      let currentChainTokens: OneInchToken[] = []
+      try {
+        currentChainTokens = await fetchWhitelistedTokens(chainId)
+      } catch (error) {
+        console.error('Failed to fetch tokens for current chain:', error)
+        set({ balancesLoading: false })
+        return
+      }
+
+      // If we have selected tokens, find their equivalents on the current chain
+      const tokensToCheck: OneInchToken[] = []
+      
+      if (baseTokenData) {
+        // Find token with same symbol on current chain
+        const baseToken = currentChainTokens.find(t => 
+          t.symbol.toLowerCase() === baseTokenData.symbol.toLowerCase()
+        )
+        if (baseToken) {
+          tokensToCheck.push(baseToken)
+        }
+      }
+      
+      if (quoteTokenData) {
+        // Find token with same symbol on current chain
+        const quoteToken = currentChainTokens.find(t => 
+          t.symbol.toLowerCase() === quoteTokenData.symbol.toLowerCase()
+        )
+        if (quoteToken && !tokensToCheck.find(t => t.address === quoteToken.address)) {
+          tokensToCheck.push(quoteToken)
+        }
+      }
+
+      // If no specific tokens selected, check a few popular ones
+      if (tokensToCheck.length === 0) {
+        const popularTokens = currentChainTokens
+          .filter(t => ['WETH', 'USDT', 'USDC', 'DAI', 'WMATIC', 'WBNB'].includes(t.symbol))
+          .slice(0, 5)
+        tokensToCheck.push(...popularTokens)
+      }
+      
+      // Get balance for each token
+      for (const token of tokensToCheck) {
+        try {
+          const balance = await hotWalletManager.getTokenBalance(token.address, chainId)
+          balances[token.address] = balance
+          console.log(`Balance for ${token.symbol} (${token.address}): ${balance}`)
+        } catch (error) {
+          console.error(`Failed to get balance for ${token.symbol}:`, error)
+          balances[token.address] = '0'
+        }
+      }
+
+      set({ 
+        hotWalletBalances: balances,
+        balancesLoading: false 
+      })
+    } catch (error) {
+      console.error('Failed to refresh hot wallet balances:', error)
+      set({ balancesLoading: false })
+    }
+  },
+
+  getHotWalletBalance: (tokenAddress: string) => {
+    const state = get()
+    return state.hotWalletBalances[tokenAddress] || '0'
   }
 }))
 

@@ -8,6 +8,7 @@ import { Play, Pause, Square, RotateCcw, AlertTriangle } from "lucide-react"
 import { useTradingStore } from "@/lib/trading-store"
 import { PerformanceMetrics } from "./performance-metrics"
 import { OrdersTable } from "./orders-table"
+import { RiskManagement } from "./risk-management"
 
 export function StatusPanel() {
   const { botStatus, setBotStatus, totalPnL, totalOrders, filledOrders, pendingOrders, uptime } = useTradingStore()
@@ -100,6 +101,9 @@ export function StatusPanel() {
 
       {/* Performance Metrics */}
       {/* <PerformanceMetrics /> */}
+
+      {/* Risk Management */}
+      <RiskManagement />
 
       {/* Control Buttons */}
       <Card>
