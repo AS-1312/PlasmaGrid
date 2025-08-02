@@ -41,7 +41,7 @@ export function WalletConnection() {
 function WalletConnectionContent() {
   const { address, isConnected, isConnecting } = useAccount()
   const chainId = useChainId()
-  const { connect, connectors, isPending } = useConnect()
+  const { connect, connectors, isPending, error } = useConnect()
   const { disconnect } = useDisconnect()
   const {
     data: balance,
@@ -58,6 +58,27 @@ function WalletConnectionContent() {
   }
 
   const currentChain = getChainInfo(chainId)
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Wallet state:', { address, isConnected, isConnecting, isPending, connectors: connectors?.length })
+  }, [address, isConnected, isConnecting, isPending, connectors])
+
+  const handleConnect = async (connector: any) => {
+    try {
+      await connect({ connector })
+    } catch (err) {
+      console.error('Connect error:', err)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnect()
+    } catch (err) {
+      console.error('Disconnect error:', err)
+    }
+  }
 
   return (
     <Card>
@@ -76,7 +97,7 @@ function WalletConnectionContent() {
                 <span>
                   {address.slice(0, 6)}...{address.slice(-4)}
                 </span>
-                <Button variant="ghost" size="sm" onClick={() => disconnect()}>
+                <Button variant="ghost" size="sm" onClick={handleDisconnect}>
                   <LogOut className="h-3 w-3" />
                 </Button>
               </div>
@@ -116,20 +137,31 @@ function WalletConnectionContent() {
               <div className="text-sm text-muted-foreground mb-4">
                 {isConnecting || isPending ? "Connecting..." : "Connect your wallet to start trading"}
               </div>
+              {error && (
+                <div className="text-red-500 text-sm mb-2">
+                  Error: {error.message}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
-              {connectors.map((connector) => (
-                <Button
-                  key={connector.uid}
-                  onClick={() => connect({ connector })}
-                  disabled={isPending}
-                  variant="outline"
-                  className="w-full"
-                >
-                  {connector.name}
-                </Button>
-              ))}
+              {connectors && connectors.length > 0 ? (
+                connectors.map((connector) => (
+                  <Button
+                    key={connector.uid}
+                    onClick={() => handleConnect(connector)}
+                    disabled={isPending || isConnecting}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {isPending ? "Connecting..." : connector.name}
+                  </Button>
+                ))
+              ) : (
+                <div className="text-center text-sm text-muted-foreground">
+                  No wallet connectors available
+                </div>
+              )}
             </div>
           </div>
         )}

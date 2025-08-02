@@ -10,7 +10,9 @@ We utilize 1inch's limit order api's to create a grid bot strategy that is power
 - **Grid Strategy**: Implements a grid trading strategy to capitalize on market fluctuations.
 
 
-### Installation
-1. Clone the repository:
-    ```bash
-    git clone
+### Todo
+- [ ] Check wallet connect
+- [ ] Check 1inch limit order in testnet/mainnet
+- [ ] Check 1inch multiple data call and what it looks like
+- [ ] See if can add tenderly hooks to show the calls
+- [ ] 
