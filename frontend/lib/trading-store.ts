@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import { getCurrentPrice, fetchWhitelistedTokens, OneInchToken, SUPPORTED_CHAINS, getPriceQuote } from "./oneinch-api"
-import { LimitOrder, convertGridTradesToLimitOrders, calculateTotalBuyValue, calculateTotalSellAmount, OneInchOrderManager, submitLimitOrdersToOneInch } from "./limit-orders"
+import { limitOrderService, GridTrade } from "./limit-order-service"
 import { hotWalletManager, HotWallet } from "./hot-wallet"
 
 interface Order {
@@ -45,7 +45,7 @@ interface TradingStore {
   lastSuggestions: any | null
 
   // Limit Orders
-  limitOrders: LimitOrder[]
+  limitOrders: GridTrade[]
   limitOrdersLoading: boolean
   limitOrdersError: string | null
   signingOrders: boolean
@@ -330,21 +330,21 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
     try {
       set({ limitOrdersLoading: true, limitOrdersError: null })
       
-      const limitOrders = convertGridTradesToLimitOrders(
-        lastSuggestions.gridTrades,
-        baseAsset,
-        quoteAsset
-      )
+      // Convert AI suggestions to GridTrade format
+      const gridTrades: GridTrade[] = lastSuggestions.gridTrades.map((trade: any, index: number) => ({
+        id: `trade-${index}-${Date.now()}`,
+        type: trade.type,
+        price: trade.price,
+        amount: trade.amount,
+        baseToken: baseAsset,
+        status: 'ready' as const,
+        reason: trade.reason
+      }))
 
-      const totalBuyValue = calculateTotalBuyValue(limitOrders)
-      const totalSellAmount = calculateTotalSellAmount(limitOrders)
-
-      console.log('Created limit orders:', limitOrders)
-      console.log(`Total buy value needed: ${totalBuyValue.toFixed(4)} ${quoteAsset}`)
-      console.log(`Total sell amount needed: ${totalSellAmount.toFixed(4)} ${baseAsset}`)
+      console.log('Created grid trades for limit orders:', gridTrades)
 
       set({ 
-        limitOrders,
+        limitOrders: gridTrades,
         limitOrdersLoading: false 
       })
     } catch (error) {
@@ -358,7 +358,7 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
 
   signAndSubmitOrders: async (chainId: number, walletAddress?: string) => {
     const state = get()
-    const { limitOrders } = state
+    const { limitOrders, baseTokenData, quoteTokenData } = state
 
     if (!limitOrders.length) {
       set({ limitOrdersError: 'No limit orders to sign and submit' })
@@ -370,62 +370,54 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       return
     }
 
+    if (!baseTokenData || !quoteTokenData) {
+      set({ limitOrdersError: 'Token data not available' })
+      return
+    }
+
     try {
       set({ signingOrders: true, limitOrdersError: null })
 
-      // Step 1: Prepare orders for signing
-      const orderManager = new OneInchOrderManager(chainId)
-      const ordersWithSigningData = limitOrders.map(order => {
-        const signingData = orderManager.prepareOrderForSigning(order)
-        return {
-          ...order,
-          orderData: { ...signingData.orderData, maker: walletAddress },
-          status: 'ready' as const
-        }
-      })
-
-      // In a real implementation, you would:
-      // 1. Use wagmi/viem to sign each order
-      // 2. Get the signature from the wallet
-      // 3. Then submit to 1inch
-      
-      // For demo purposes, simulate signing
-      console.log('Orders prepared for signing:', ordersWithSigningData)
-      console.log('In a real app, these would be signed by the wallet')
-
-      // Simulate signatures (in real app, these would come from wallet)
-      const signedOrders = ordersWithSigningData.map(order => ({
-        ...order,
-        signature: `0x${'0'.repeat(130)}`, // Mock signature
-        status: 'created' as const
-      }))
+      // Step 1: Create 1inch limit orders from grid trades
+      const ordersWithLimitOrders = await limitOrderService.createLimitOrdersFromTrades(
+        limitOrders,
+        baseTokenData.address,
+        quoteTokenData.address,
+        walletAddress,
+        chainId,
+        60 // 1 hour expiration
+      )
 
       set({ 
-        limitOrders: signedOrders,
+        limitOrders: ordersWithLimitOrders,
         signingOrders: false,
         submittingOrders: true 
       })
 
-      // Step 2: Submit to 1inch
-      const result = await submitLimitOrdersToOneInch(signedOrders, chainId)
-
-      const allOrders = [...result.submitted, ...result.failed.map(f => f.order)]
+      // Step 2: For now, we'll simulate signing and submission
+      // In a real implementation, you would:
+      // 1. Get the signer from wagmi
+      // 2. Sign each order with the user's wallet
+      // 3. Submit to 1inch API
       
+      console.log('1inch Limit orders created:', ordersWithLimitOrders)
+      console.log('Note: Real signing and submission requires user wallet interaction')
+
+      // Simulate submission delay
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Update status to submitted (simulated)
+      const submittedOrders = ordersWithLimitOrders.map(order => ({
+        ...order,
+        status: 'submitted' as const
+      }))
+
       set({ 
-        limitOrders: allOrders,
+        limitOrders: submittedOrders,
         submittingOrders: false 
       })
 
-      if (result.submitted.length > 0) {
-        console.log(`Successfully submitted ${result.submitted.length} orders to 1inch`)
-      }
-      
-      if (result.failed.length > 0) {
-        console.warn(`Failed to submit ${result.failed.length} orders:`, result.failed)
-        set({ 
-          limitOrdersError: `Failed to submit ${result.failed.length} orders. Check console for details.`
-        })
-      }
+      console.log(`Successfully prepared ${submittedOrders.length} limit orders for 1inch`)
 
     } catch (error) {
       console.error('Failed to sign and submit orders:', error)

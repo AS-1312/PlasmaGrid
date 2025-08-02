@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { useTradingStore } from "@/lib/trading-store"
+import { useLimitOrderSigning } from "@/hooks/use-limit-order-signing"
 
 export function RangeStrategyPanel() {
   const chainId = useChainId()
@@ -18,6 +19,14 @@ export function RangeStrategyPanel() {
   const [maxPrice, setMaxPrice] = useState<string>("")
   const [orderSize, setOrderSize] = useState<string>("100")
   const [orderSizePercentage, setOrderSizePercentage] = useState<number>(100)
+
+  const {
+    isSigningOrders,
+    signingError,
+    signLimitOrders,
+    submitSignedOrders,
+    resetSigning
+  } = useLimitOrderSigning()
 
   const { 
     currentPrice, 
@@ -36,6 +45,7 @@ export function RangeStrategyPanel() {
     signingOrders,
     submittingOrders,
     baseTokenData,
+    quoteTokenData,
     getHotWalletBalance,
     hotWallet
   } = useTradingStore()
@@ -107,6 +117,44 @@ export function RangeStrategyPanel() {
     }
     
     return ""
+  }
+
+  // Handle signing and submitting orders with 1inch SDK
+  const handleSignAndSubmitOrders = async () => {
+    if (!chainId || !walletAddress || !baseTokenData || !quoteTokenData || !hotWallet) {
+      console.error("Missing required data for signing orders")
+      return
+    }
+
+    try {
+      resetSigning()
+      
+      console.log('Creating limit orders with hot wallet:', hotWallet.address)
+      console.log('Orders to create:', limitOrders)
+      
+      // Step 1: Sign the limit orders using hot wallet address (not user wallet!)
+      const signedOrders = await signLimitOrders(
+        limitOrders,
+        baseTokenData.address,
+        quoteTokenData.address,
+        chainId,
+        hotWallet.address // Use hot wallet address as maker!
+      )
+
+      // Step 2: Submit the signed orders to 1inch
+      await submitSignedOrders(signedOrders, chainId)
+
+      // Step 3: Update the orders in the store
+      const updatedOrders = signedOrders.map(so => ({
+        ...so.trade,
+        status: 'submitted' as const
+      }))
+      
+      console.log("Orders successfully signed and submitted:", updatedOrders)
+
+    } catch (error) {
+      console.error("Failed to sign and submit orders:", error)
+    }
   }
 
   // Initialize order size when base token data or hot wallet balance changes
@@ -262,19 +310,28 @@ export function RangeStrategyPanel() {
                           </div>
                         )}
                         
+                        {signingError && (
+                          <div className="text-red-500 dark:text-red-400 text-sm mb-2">
+                            Signing Error: {signingError}
+                          </div>
+                        )}
+                        
                         {limitOrders.length > 0 && (
                           <div className="space-y-2">
                             <div className="text-xs text-blue-600 dark:text-blue-400 mb-2">
                               {limitOrders.length} orders ready for execution
                             </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-400 mb-2 p-2 bg-orange-50 dark:bg-orange-950/50 rounded border">
+                              🔧 <strong>Development Note:</strong> 1inch SDK integration is active. Orders will be created using the hot wallet address, signed by your connected wallet, but submission is simulated (requires 1inch API key for production).
+                            </div>
                             <div className="flex justify-end mb-2">
                               <Button 
                                 variant="default" 
                                 size="sm"
-                                onClick={() => walletAddress && signAndSubmitOrders(chainId, walletAddress)}
-                                disabled={signingOrders || submittingOrders || !walletAddress}
+                                onClick={handleSignAndSubmitOrders}
+                                disabled={isSigningOrders || signingOrders || submittingOrders || !walletAddress}
                               >
-                                {signingOrders ? "Signing..." : submittingOrders ? "Submitting..." : "Sign & Submit Orders"}
+                                {isSigningOrders ? "Signing..." : signingOrders ? "Signing..." : submittingOrders ? "Submitting..." : "Sign & Submit Orders"}
                               </Button>
                             </div>
                             <div className="grid gap-2">
