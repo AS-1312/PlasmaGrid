@@ -14,6 +14,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 60 * 1000,
             retry: 1,
+            refetchOnWindowFocus: false,
           },
         },
       }),
@@ -26,7 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   // Don't render providers until mounted to avoid hydration issues
   if (!mounted) {
-    return <div className="min-h-screen bg-background">{children}</div>
+    return <div className="min-h-screen bg-background" suppressHydrationWarning>{children}</div>
   }
 
   return (

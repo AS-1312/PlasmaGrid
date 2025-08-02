@@ -8,9 +8,8 @@ import { Providers } from "@/components/providers"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "1inch Range Trading Bot Dashboard",
-  description: "Professional trading bot interface for 1inch limit orders",
-    generator: 'v0.dev'
+  title: "Plasma Grid",
+  description: "Create 1inch Grid bots",
 }
 
 export default function RootLayout({
