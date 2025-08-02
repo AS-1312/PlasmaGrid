@@ -3,6 +3,7 @@
 import { ConfigurationPanel } from "./configuration-panel"
 import { TradingChart } from "./trading-chart"
 import { StatusPanel } from "./status-panel"
+import { RangeStrategyPanel } from "./range-strategy-panel"
 import { Header } from "./header"
 import { useEffect, useState } from "react"
 
@@ -44,15 +45,20 @@ export function TradingDashboard() {
             <ConfigurationPanel />
           </div>
 
-          {/* Trading Chart */}
+          {/* Range Strategy Settings */}
           <div className="lg:col-span-6">
-            <TradingChart />
+            <RangeStrategyPanel />
           </div>
 
           {/* Status Panel */}
           <div className="lg:col-span-3">
             <StatusPanel />
           </div>
+        </div>
+
+        {/* Trading Chart - Full Width */}
+        <div className="mt-6">
+          <TradingChart />
         </div>
       </div>
     </div>
