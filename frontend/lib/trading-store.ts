@@ -66,7 +66,7 @@ interface TradingStore {
   fetchRealPrice: (chainId: number) => Promise<void>
   loadTokens: (chainId: number) => Promise<void>
   tryFetchPrice: (chainId: number) => Promise<void>
-  getSuggestedTrades: () => Promise<void>
+  getSuggestedTrades: (orderSize?: number) => Promise<void>
   
   // Hot Wallet Actions
   initializeHotWallet: () => void
@@ -270,7 +270,7 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
     }
   },
 
-  getSuggestedTrades: async () => {
+  getSuggestedTrades: async (orderSize?: number) => {
     const state = get()
     const { currentPrice, baseAsset, quoteAsset } = state
 
@@ -292,7 +292,8 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
         body: JSON.stringify({
           currentPrice,
           baseAsset,
-          quoteAsset
+          quoteAsset,
+          orderSize: orderSize || 100 // Default to 100 if not provided
         })
       })
 

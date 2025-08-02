@@ -4,6 +4,7 @@ interface OpenRouterRequest {
   currentPrice: number
   baseAsset: string
   quoteAsset: string
+  orderSize?: number
 }
 
 interface GridTrade {
@@ -22,7 +23,7 @@ interface OpenRouterResponse {
 export async function POST(request: NextRequest) {
   try {
     const body: OpenRouterRequest = await request.json()
-    const { currentPrice, baseAsset, quoteAsset } = body
+    const { currentPrice, baseAsset, quoteAsset, orderSize = 100 } = body
 
     if (!currentPrice || !baseAsset || !quoteAsset) {
       return NextResponse.json(
@@ -39,12 +40,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const prompt = `Current price for ${baseAsset} is $${currentPrice}. Return as JSON the grid trades based on current market sentiment. I want to create 5 orders for ${baseAsset}/${quoteAsset} trading pair.
+    const prompt = `Current price for ${baseAsset} is $${currentPrice}. Available order size budget is ${orderSize} ${baseAsset}. Return as JSON the grid trades based on current market sentiment. I want to create 5 orders for ${baseAsset}/${quoteAsset} trading pair.
 
 Please analyze the current market conditions and provide:
 1. 5 strategic grid trading orders (mix of buy and sell orders)
 2. Market sentiment analysis
 3. Reasoning for the suggested trades
+
+IMPORTANT: Make sure the total amount across all suggested orders does not exceed ${orderSize} ${baseAsset}. Distribute the amounts appropriately based on the strategy.
 
 Return the response in this exact JSON format:
 {
@@ -52,7 +55,7 @@ Return the response in this exact JSON format:
     {
       "type": "buy",
       "price": 0.95,
-      "amount": 100,
+      "amount": 0.25,
       "reason": "Support level buy order"
     }
   ],

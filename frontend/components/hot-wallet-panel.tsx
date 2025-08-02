@@ -12,12 +12,14 @@ import { Separator } from "@/components/ui/separator"
 import { Copy, Wallet, RefreshCw, Send } from "lucide-react"
 import { useTradingStore } from "@/lib/trading-store"
 import { fetchWhitelistedTokens, OneInchToken } from "@/lib/oneinch-api"
+import { hotWalletManager } from "@/lib/hot-wallet"
 
 export function HotWalletPanel() {
   const [fundAmount, setFundAmount] = useState("")
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [currentChainTokens, setCurrentChainTokens] = useState<any[]>([])
+  const [nativeTokenBalance, setNativeTokenBalance] = useState<string>("0")
 
   const { address: userAddress, isConnected } = useAccount()
   const chainId = useChainId()
@@ -47,6 +49,36 @@ export function HotWalletPanel() {
     getHotWalletBalance
   } = useTradingStore()
 
+  // Define native tokens for each chain
+  const getNativeTokenInfo = (chainId: number) => {
+    const nativeTokens: Record<number, { symbol: string; name: string; decimals: number }> = {
+      1: { symbol: "ETH", name: "Ethereum", decimals: 18 },
+      137: { symbol: "POL", name: "Polygon", decimals: 18 },
+      56: { symbol: "BNB", name: "BNB Smart Chain", decimals: 18 },
+      42161: { symbol: "ETH", name: "Arbitrum", decimals: 18 },
+      10: { symbol: "ETH", name: "Optimism", decimals: 18 },
+      43114: { symbol: "AVAX", name: "Avalanche", decimals: 18 },
+      250: { symbol: "FTM", name: "Fantom", decimals: 18 },
+      8453: { symbol: "ETH", name: "Base", decimals: 18 }
+    }
+    return nativeTokens[chainId] || { symbol: "ETH", name: "Native Token", decimals: 18 }
+  }
+
+  // Get native token balance
+  const fetchNativeTokenBalance = async () => {
+    if (!hotWallet || !chainId) return
+    
+    try {
+      // Use the native token address (0x0) or the special native address
+      const nativeAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      const balance = await hotWalletManager.getTokenBalance(nativeAddress, chainId)
+      setNativeTokenBalance(balance)
+    } catch (error) {
+      console.error("Failed to fetch native token balance:", error)
+      setNativeTokenBalance("0")
+    }
+  }
+
   // Initialize hot wallet on component mount
   useEffect(() => {
     if (!hotWallet) {
@@ -75,6 +107,13 @@ export function HotWalletPanel() {
     }
   }, [hotWallet, tokens, chainId, refreshHotWalletBalances])
 
+  // Fetch native token balance when wallet or chain changes
+  useEffect(() => {
+    if (hotWallet && chainId) {
+      fetchNativeTokenBalance()
+    }
+  }, [hotWallet, chainId])
+
   // Handle successful transaction
   useEffect(() => {
     if (isTxSuccess && (txHash || sendTxHash || writeTxHash)) {
@@ -86,6 +125,7 @@ export function HotWalletPanel() {
       if (hotWallet && tokens.length > 0 && chainId) {
         setTimeout(() => {
           refreshHotWalletBalances(chainId)
+          fetchNativeTokenBalance() // Also refresh native token balance
         }, 2000) // Wait 2 seconds for block confirmation
       }
     }
@@ -335,7 +375,12 @@ export function HotWalletPanel() {
           <div className="flex items-center justify-between">
             <Label>Hot Wallet Balances</Label>
             <Button
-              onClick={() => chainId && refreshHotWalletBalances(chainId)}
+              onClick={() => {
+                if (chainId) {
+                  refreshHotWalletBalances(chainId)
+                  fetchNativeTokenBalance()
+                }
+              }}
               disabled={balancesLoading}
             >
               {balancesLoading ? (
@@ -347,6 +392,19 @@ export function HotWalletPanel() {
           </div>
 
           <div className="space-y-2">
+            {/* Native Token Balance */}
+            {chainId && (
+              <div className="flex justify-between items-center p-2 bg-muted/50 rounded">
+                <div className="flex items-center space-x-2">
+                  <div className="font-medium text-sm">{getNativeTokenInfo(chainId).symbol}</div>
+                  <Badge className="text-xs">Native</Badge>
+                </div>
+                <div className="text-sm font-mono">
+                  {formatBalance(nativeTokenBalance)}
+                </div>
+              </div>
+            )}
+
             {baseTokenData && (
               <div className="flex justify-between items-center p-2 bg-muted/50 rounded">
                 <div className="flex items-center space-x-2">

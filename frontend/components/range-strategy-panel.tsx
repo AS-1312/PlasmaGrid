@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useChainId, useAccount } from "wagmi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,8 @@ export function RangeStrategyPanel() {
   const [gridLevels, setGridLevels] = useState([20])
   const [minPrice, setMinPrice] = useState<string>("")
   const [maxPrice, setMaxPrice] = useState<string>("")
+  const [orderSize, setOrderSize] = useState<string>("100")
+  const [orderSizePercentage, setOrderSizePercentage] = useState<number>(100)
 
   const { 
     currentPrice, 
@@ -32,8 +34,91 @@ export function RangeStrategyPanel() {
     limitOrders,
     signAndSubmitOrders,
     signingOrders,
-    submittingOrders
+    submittingOrders,
+    baseTokenData,
+    getHotWalletBalance,
+    hotWallet
   } = useTradingStore()
+
+  // Get base token balance from hot wallet
+  const getBaseTokenBalance = (): number => {
+    if (!baseTokenData || !hotWallet) return 0
+    const balance = getHotWalletBalance(baseTokenData.address)
+    return parseFloat(balance) || 0
+  }
+
+  // Calculate order size based on percentage of available balance
+  const calculateOrderSizeFromPercentage = (percentage: number): string => {
+    const balance = getBaseTokenBalance()
+    const amount = (balance * percentage) / 100
+    return amount.toFixed(6)
+  }
+
+  // Handle percentage button clicks
+  const handlePercentageClick = (percentage: number) => {
+    const balance = getBaseTokenBalance()
+    if (balance === 0) {
+      // Show a warning if no balance available
+      return
+    }
+    setOrderSizePercentage(percentage)
+    const calculatedSize = calculateOrderSizeFromPercentage(percentage)
+    setOrderSize(calculatedSize)
+  }
+
+  // Handle manual order size input
+  const handleOrderSizeChange = (value: string) => {
+    setOrderSize(value)
+    const balance = getBaseTokenBalance()
+    if (balance > 0) {
+      const percentage = (parseFloat(value) / balance) * 100
+      setOrderSizePercentage(Math.min(percentage, 100))
+    }
+  }
+
+  // Check if there's sufficient balance for the suggested trades
+  const hasSufficientBalance = (): boolean => {
+    if (!lastSuggestions?.gridTrades || !baseTokenData) return false
+    
+    const totalRequiredAmount = lastSuggestions.gridTrades.reduce((sum: number, trade: any) => {
+      return sum + (trade.amount || 0)
+    }, 0)
+    
+    const availableBalance = getBaseTokenBalance()
+    return availableBalance >= totalRequiredAmount && totalRequiredAmount > 0
+  }
+
+  // Get insufficient balance message
+  const getInsufficientBalanceMessage = (): string => {
+    if (!lastSuggestions?.gridTrades || !baseTokenData) return ""
+    
+    const totalRequiredAmount = lastSuggestions.gridTrades.reduce((sum: number, trade: any) => {
+      return sum + (trade.amount || 0)
+    }, 0)
+    
+    const availableBalance = getBaseTokenBalance()
+    
+    if (availableBalance === 0) {
+      return `No ${baseTokenData.symbol} balance in hot wallet`
+    }
+    
+    if (totalRequiredAmount > availableBalance) {
+      return `Insufficient balance: need ${totalRequiredAmount.toFixed(6)} ${baseTokenData.symbol}, have ${availableBalance.toFixed(6)} ${baseTokenData.symbol}`
+    }
+    
+    return ""
+  }
+
+  // Initialize order size when base token data or hot wallet balance changes
+  useEffect(() => {
+    if (baseTokenData && hotWallet && orderSize === "100") {
+      // Only update if still at default value
+      const calculatedSize = calculateOrderSizeFromPercentage(100)
+      if (calculatedSize !== "0.000000") {
+        setOrderSize(calculatedSize)
+      }
+    }
+  }, [baseTokenData, hotWallet])
 
   return (
     <div>
@@ -85,8 +170,8 @@ export function RangeStrategyPanel() {
                 variant="default" 
                 size="sm"
                 className="flex-1 h-10"
-                onClick={getSuggestedTrades}
-                disabled={!currentPrice || priceLoading || !!priceError || suggestionsLoading}
+                onClick={() => getSuggestedTrades(parseFloat(orderSize))}
+                disabled={!currentPrice || priceLoading || !!priceError || suggestionsLoading || getBaseTokenBalance() === 0}
               >
                 {suggestionsLoading ? "Getting AI Suggestions..." : "AI Suggest Trades"}
               </Button>
@@ -124,7 +209,13 @@ export function RangeStrategyPanel() {
                     
                     {lastSuggestions.gridTrades && lastSuggestions.gridTrades.length > 0 && (
                       <div className="space-y-2">
-                        <h5 className="text-xs font-medium">Suggested Orders:</h5>
+                        <div className="flex items-center justify-between text-xs">
+                          <h5 className="font-medium">Suggested Orders:</h5>
+                          <div className="text-muted-foreground">
+                            Total: {lastSuggestions.gridTrades.reduce((sum: number, trade: any) => sum + (trade.amount || 0), 0).toFixed(4)} {baseAsset}
+                            <span className="ml-2">({((lastSuggestions.gridTrades.reduce((sum: number, trade: any) => sum + (trade.amount || 0), 0) / parseFloat(orderSize)) * 100).toFixed(1)}% of order size)</span>
+                          </div>
+                        </div>
                         <div className="grid gap-2">
                           {lastSuggestions.gridTrades.map((trade: any, index: number) => (
                             <div key={index} className="flex items-center justify-between text-xs p-2 bg-background rounded border">
@@ -142,12 +233,17 @@ export function RangeStrategyPanel() {
                           ))}
                         </div>
                         
-                        <div className="flex justify-end mt-3">
+                        <div className="flex flex-col items-end mt-3 space-y-2">
+                          {!hasSufficientBalance() && lastSuggestions?.gridTrades && (
+                            <p className="text-xs text-red-500 dark:text-red-400">
+                              {getInsufficientBalanceMessage()}
+                            </p>
+                          )}
                           <Button 
                             variant="secondary" 
                             size="sm"
                             onClick={createLimitOrdersFromSuggestions}
-                            disabled={limitOrdersLoading}
+                            disabled={limitOrdersLoading || !hasSufficientBalance()}
                           >
                             {limitOrdersLoading ? "Creating Orders..." : "Create Limit Orders"}
                           </Button>
@@ -236,10 +332,31 @@ export function RangeStrategyPanel() {
 
             <div className="space-y-2">
               <Label>Order Size</Label>
-              <Input type="number" placeholder="100" />
+              <Input 
+                type="number" 
+                placeholder="100" 
+                value={orderSize}
+                onChange={(e) => handleOrderSizeChange(e.target.value)}
+              />
+              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                <span>Available: {getBaseTokenBalance().toFixed(6)} {baseTokenData?.symbol || baseAsset}</span>
+                <span>{orderSizePercentage.toFixed(1)}% of balance</span>
+              </div>
+              {getBaseTokenBalance() === 0 && (
+                <div className="text-xs text-orange-500 dark:text-orange-400 p-2 bg-orange-50 dark:bg-orange-950/50 rounded border">
+                  ⚠️ No {baseTokenData?.symbol || baseAsset} balance in hot wallet. Please fund the hot wallet to create orders.
+                </div>
+              )}
               <div className="flex space-x-2">
                 {[25, 50, 75, 100].map((percent) => (
-                  <Button key={percent} size="sm" className="flex-1">
+                  <Button 
+                    key={percent} 
+                    size="sm" 
+                    className="flex-1"
+                    variant={orderSizePercentage === percent ? "default" : "outline"}
+                    onClick={() => handlePercentageClick(percent)}
+                    disabled={getBaseTokenBalance() === 0}
+                  >
                     {percent}%
                   </Button>
                 ))}
