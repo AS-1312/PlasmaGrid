@@ -2,6 +2,7 @@
 
 import { create } from "zustand"
 import { getCurrentPrice, fetchWhitelistedTokens, OneInchToken, SUPPORTED_CHAINS, getPriceQuote } from "./oneinch-api"
+import { LimitOrder, convertGridTradesToLimitOrders, calculateTotalBuyValue, calculateTotalSellAmount, OneInchOrderManager, submitLimitOrdersToOneInch } from "./limit-orders"
 
 interface Order {
   id: string
@@ -35,6 +36,13 @@ interface TradingStore {
   suggestionsError: string | null
   lastSuggestions: any | null
 
+  // Limit Orders
+  limitOrders: LimitOrder[]
+  limitOrdersLoading: boolean
+  limitOrdersError: string | null
+  signingOrders: boolean
+  submittingOrders: boolean
+
   // Orders & Performance
   orders: Order[]
   totalOrders: number
@@ -50,7 +58,9 @@ interface TradingStore {
   fetchRealPrice: (chainId: number) => Promise<void>
   loadTokens: (chainId: number) => Promise<void>
   tryFetchPrice: (chainId: number) => Promise<void>
-        getSuggestedTrades: () => Promise<void>
+  getSuggestedTrades: () => Promise<void>
+  createLimitOrdersFromSuggestions: () => void
+  signAndSubmitOrders: (chainId: number, walletAddress?: string) => Promise<void>
 }
 
 // Mock orders data
@@ -125,6 +135,11 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   suggestionsLoading: false,
   suggestionsError: null,
   lastSuggestions: null,
+  limitOrders: [],
+  limitOrdersLoading: false,
+  limitOrdersError: null,
+  signingOrders: false,
+  submittingOrders: false,
   orders: mockOrders,
   totalOrders: mockOrders.length,
   filledOrders: mockOrders.filter((o) => o.status === "filled").length,
@@ -276,6 +291,125 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       set({ 
         suggestionsLoading: false,
         suggestionsError: error instanceof Error ? error.message : 'Failed to get suggestions'
+      })
+    }
+  },
+
+  createLimitOrdersFromSuggestions: () => {
+    const state = get()
+    const { lastSuggestions, baseAsset, quoteAsset } = state
+
+    if (!lastSuggestions || !lastSuggestions.gridTrades || !baseAsset || !quoteAsset) {
+      set({ limitOrdersError: 'No suggestions available to create limit orders' })
+      return
+    }
+
+    try {
+      set({ limitOrdersLoading: true, limitOrdersError: null })
+      
+      const limitOrders = convertGridTradesToLimitOrders(
+        lastSuggestions.gridTrades,
+        baseAsset,
+        quoteAsset
+      )
+
+      const totalBuyValue = calculateTotalBuyValue(limitOrders)
+      const totalSellAmount = calculateTotalSellAmount(limitOrders)
+
+      console.log('Created limit orders:', limitOrders)
+      console.log(`Total buy value needed: ${totalBuyValue.toFixed(4)} ${quoteAsset}`)
+      console.log(`Total sell amount needed: ${totalSellAmount.toFixed(4)} ${baseAsset}`)
+
+      set({ 
+        limitOrders,
+        limitOrdersLoading: false 
+      })
+    } catch (error) {
+      console.error('Failed to create limit orders:', error)
+      set({ 
+        limitOrdersLoading: false,
+        limitOrdersError: error instanceof Error ? error.message : 'Failed to create limit orders'
+      })
+    }
+  },
+
+  signAndSubmitOrders: async (chainId: number, walletAddress?: string) => {
+    const state = get()
+    const { limitOrders } = state
+
+    if (!limitOrders.length) {
+      set({ limitOrdersError: 'No limit orders to sign and submit' })
+      return
+    }
+
+    if (!walletAddress) {
+      set({ limitOrdersError: 'Wallet not connected' })
+      return
+    }
+
+    try {
+      set({ signingOrders: true, limitOrdersError: null })
+
+      // Step 1: Prepare orders for signing
+      const orderManager = new OneInchOrderManager(chainId)
+      const ordersWithSigningData = limitOrders.map(order => {
+        const signingData = orderManager.prepareOrderForSigning(order)
+        return {
+          ...order,
+          orderData: { ...signingData.orderData, maker: walletAddress },
+          status: 'ready' as const
+        }
+      })
+
+      // In a real implementation, you would:
+      // 1. Use wagmi/viem to sign each order
+      // 2. Get the signature from the wallet
+      // 3. Then submit to 1inch
+      
+      // For demo purposes, simulate signing
+      console.log('Orders prepared for signing:', ordersWithSigningData)
+      console.log('In a real app, these would be signed by the wallet')
+
+      // Simulate signatures (in real app, these would come from wallet)
+      const signedOrders = ordersWithSigningData.map(order => ({
+        ...order,
+        signature: `0x${'0'.repeat(130)}`, // Mock signature
+        status: 'created' as const
+      }))
+
+      set({ 
+        limitOrders: signedOrders,
+        signingOrders: false,
+        submittingOrders: true 
+      })
+
+      // Step 2: Submit to 1inch
+      const result = await submitLimitOrdersToOneInch(signedOrders, chainId)
+
+      const allOrders = [...result.submitted, ...result.failed.map(f => f.order)]
+      
+      set({ 
+        limitOrders: allOrders,
+        submittingOrders: false 
+      })
+
+      if (result.submitted.length > 0) {
+        console.log(`Successfully submitted ${result.submitted.length} orders to 1inch`)
+      }
+      
+      if (result.failed.length > 0) {
+        console.warn(`Failed to submit ${result.failed.length} orders:`, result.failed)
+        set({ 
+          limitOrdersError: `Failed to submit ${result.failed.length} orders. Check console for details.`
+        })
+      }
+
+    } catch (error) {
+      console.error('Failed to sign and submit orders:', error)
+      set({ 
+        signingOrders: false,
+        submittingOrders: false,
+        limitOrdersError: error instanceof Error ? error.message : 'Failed to sign and submit orders'
       })
     }
   }

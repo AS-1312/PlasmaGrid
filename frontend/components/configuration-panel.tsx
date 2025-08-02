@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useChainId } from "wagmi"
+import { useChainId, useAccount } from "wagmi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,7 @@ import { SUPPORTED_CHAINS, SupportedChain } from "@/lib/oneinch-api"
 
 export function ConfigurationPanel() {
   const chainId = useChainId()
+  const { address: walletAddress } = useAccount()
   const [gridLevels, setGridLevels] = useState([20])
   const [stopLoss, setStopLoss] = useState(false)
   const [takeProfit, setTakeProfit] = useState(false)
@@ -36,11 +37,18 @@ export function ConfigurationPanel() {
     suggestionsLoading,
     suggestionsError,
     lastSuggestions,
+    limitOrders,
+    limitOrdersLoading,
+    limitOrdersError,
+    signingOrders,
+    submittingOrders,
     setBaseAsset, 
     setQuoteAsset,
     tryFetchPrice,
     loadTokens,
-    getSuggestedTrades
+    getSuggestedTrades,
+    createLimitOrdersFromSuggestions,
+    signAndSubmitOrders
   } = useTradingStore()
 
   // Custom handlers that trigger price fetching with current chainId
@@ -264,6 +272,72 @@ export function ConfigurationPanel() {
                             </div>
                           ))}
                         </div>
+                        
+                        <div className="flex justify-end mt-3">
+                          <Button 
+                            variant="secondary" 
+                            size="sm"
+                            onClick={createLimitOrdersFromSuggestions}
+                            disabled={limitOrdersLoading}
+                          >
+                            {limitOrdersLoading ? "Creating Orders..." : "Create Limit Orders"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Limit Orders Display */}
+                    {(limitOrdersError || limitOrders.length > 0) && (
+                      <div className="mt-4 p-4 border rounded-lg bg-blue-50/50">
+                        <h5 className="text-sm font-medium mb-3">Limit Orders</h5>
+                        
+                        {limitOrdersError && (
+                          <div className="text-red-500 text-sm mb-2">
+                            Error: {limitOrdersError}
+                          </div>
+                        )}
+                        
+                        {limitOrders.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs text-blue-600 mb-2">
+                              {limitOrders.length} orders ready for execution
+                            </div>
+                            <div className="flex justify-end mb-2">
+                              <Button 
+                                variant="default" 
+                                size="sm"
+                                onClick={() => signAndSubmitOrders(chainId, walletAddress)}
+                                disabled={signingOrders || submittingOrders || !walletAddress}
+                              >
+                                {signingOrders ? "Signing..." : submittingOrders ? "Submitting..." : "Sign & Submit Orders"}
+                              </Button>
+                            </div>
+                            <div className="grid gap-2">
+                              {limitOrders.map((order, index) => (
+                                <div key={order.id} className="flex items-center justify-between text-xs p-2 bg-white rounded border border-blue-200">
+                                  <div className="flex items-center space-x-2">
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                      order.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                    }`}>
+                                      {order.type.toUpperCase()}
+                                    </span>
+                                    <span>${order.price}</span>
+                                    <span>{order.amount} {order.baseToken}</span>
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                      order.status === 'ready' ? 'bg-blue-100 text-blue-700' : 
+                                      order.status === 'created' ? 'bg-purple-100 text-purple-700' :
+                                      order.status === 'submitted' ? 'bg-green-100 text-green-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}>
+                                      {order.status.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <span className="text-muted-foreground">{order.reason}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
