@@ -23,8 +23,36 @@ export function ConfigurationPanel() {
   const [gridLevels, setGridLevels] = useState([20])
   const [stopLoss, setStopLoss] = useState(false)
   const [takeProfit, setTakeProfit] = useState(false)
+  const [minPrice, setMinPrice] = useState<string>("")
+  const [maxPrice, setMaxPrice] = useState<string>("")
 
-  const { currentPrice, baseAsset, quoteAsset, setBaseAsset, setQuoteAsset } = useTradingStore()
+  const { 
+    currentPrice, 
+    baseAsset, 
+    quoteAsset, 
+    priceLoading,
+    priceError,
+    tokensLoading,
+    setBaseAsset, 
+    setQuoteAsset,
+    tryFetchPrice,
+    loadTokens
+  } = useTradingStore()
+
+  // Custom handlers that trigger price fetching with current chainId
+  const handleBaseAssetChange = (asset: string) => {
+    setBaseAsset(asset)
+    if (quoteAsset && asset !== quoteAsset) {
+      tryFetchPrice(currentChainId)
+    }
+  }
+
+  const handleQuoteAssetChange = (asset: string) => {
+    setQuoteAsset(asset)
+    if (baseAsset && asset !== baseAsset) {
+      tryFetchPrice(currentChainId)
+    }
+  }
 
   // Map chainId to SupportedChain
   const getNetworkFromChainId = (chainId: number): SupportedChain => {
@@ -34,6 +62,28 @@ export function ConfigurationPanel() {
 
   const currentNetwork = getNetworkFromChainId(chainId)
   const currentChainId = SUPPORTED_CHAINS[currentNetwork]
+
+  // Load tokens when component mounts or chain changes
+  useEffect(() => {
+    loadTokens(currentChainId)
+  }, [currentChainId, loadTokens])
+
+  // Fetch real price when assets change or chain changes
+  useEffect(() => {
+    if (baseAsset && quoteAsset && baseAsset !== quoteAsset) {
+      tryFetchPrice(currentChainId)
+    }
+  }, [baseAsset, quoteAsset, currentChainId, tryFetchPrice])
+
+  // Update min/max prices based on current price (±5% range)
+  useEffect(() => {
+    if (currentPrice && !priceLoading && !priceError) {
+      const minPriceValue = (currentPrice * 0.95).toFixed(2)
+      const maxPriceValue = (currentPrice * 1.05).toFixed(2)
+      setMinPrice(minPriceValue)
+      setMaxPrice(maxPriceValue)
+    }
+  }, [currentPrice, priceLoading, priceError])
 
   return (
     <div className="space-y-6">
@@ -57,7 +107,7 @@ export function ConfigurationPanel() {
               <Label>Base Asset</Label>
               <TokenSelect 
                 value={baseAsset} 
-                onValueChange={setBaseAsset}
+                onValueChange={handleBaseAssetChange}
                 chainId={currentChainId}
                 placeholder="Select base token..."
               />
@@ -67,7 +117,7 @@ export function ConfigurationPanel() {
               <Label>Quote Asset</Label>
               <TokenSelect 
                 value={quoteAsset} 
-                onValueChange={setQuoteAsset}
+                onValueChange={handleQuoteAssetChange}
                 chainId={currentChainId}
                 placeholder="Select quote token..."
               />
@@ -79,12 +129,26 @@ export function ConfigurationPanel() {
               <span className="text-sm font-medium">
                 {baseAsset}/{quoteAsset}
               </span>
-              <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
-                +2.34%
-              </Badge>
+              
             </div>
-            <div className="text-2xl font-bold">${currentPrice.toLocaleString()}</div>
-            <div className="text-sm text-muted-foreground">24h Volume: $1.2B</div>
+            <div className="text-2xl font-bold">
+              {priceLoading || tokensLoading ? (
+                <span className="text-muted-foreground">Loading...</span>
+              ) : priceError ? (
+                <span className="text-red-500">Error loading price</span>
+              ) : (
+                `$${currentPrice.toLocaleString()}`
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {tokensLoading ? (
+                <span className="text-blue-500">Loading token data...</span>
+              ) : priceError ? (
+                <span className="text-red-500">{priceError}</span>
+              ) : (
+                "Real-time price from 1inch"
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -107,10 +171,7 @@ export function ConfigurationPanel() {
               </div>
             </div>
 
-            <div className="p-4 bg-muted/50 border rounded-lg text-center">
-              <div className="text-sm text-muted-foreground">Current Price</div>
-              <div className="text-lg font-bold">${currentPrice.toLocaleString()}</div>
-            </div>
+         
 
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30 slider-container">
               <Label className="text-sm font-medium">Grid Levels: {gridLevels[0]}</Label>

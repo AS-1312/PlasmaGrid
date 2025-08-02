@@ -226,3 +226,59 @@ export async function getSwapTransaction(
     throw error
   }
 }
+
+/**
+ * Get current price for a token pair using 1inch quote API
+ * Returns the price of 1 unit of src token in terms of dst token
+ */
+export async function getCurrentPrice(
+  chainId: number,
+  srcToken: string,
+  dstToken: string,
+  srcDecimals: number = 18,
+  dstDecimals: number = 18
+): Promise<number> {
+  try {
+    // Use 1 unit of the source token
+    const amount = (10 ** srcDecimals).toString()
+    
+    const quote = await getSwapQuote(chainId, srcToken, dstToken, amount)
+    
+    // Convert the destination amount to a readable number
+    const dstAmount = parseInt(quote.dstAmount) / (10 ** dstDecimals)
+    
+    return dstAmount
+  } catch (error) {
+    console.error('Error fetching current price:', error)
+    throw error
+  }
+}
+
+/**
+ * Get a price quote with better error handling and fallbacks
+ */
+export async function getPriceQuote(
+  chainId: number,
+  srcTokenAddress: string,
+  dstTokenAddress: string,
+  srcDecimals: number = 18,
+  dstDecimals: number = 18,
+  amount: string = "1"
+): Promise<{ price: number; quote: OneInchQuoteResponse }> {
+  try {
+    // Convert amount to wei format
+    const amountInWei = (parseFloat(amount) * (10 ** srcDecimals)).toString()
+    
+    const quote = await getSwapQuote(chainId, srcTokenAddress, dstTokenAddress, amountInWei)
+    
+    // Calculate price per unit
+    const dstAmount = parseInt(quote.dstAmount) / (10 ** dstDecimals)
+    const srcAmount = parseFloat(amount)
+    const price = dstAmount / srcAmount
+    
+    return { price, quote }
+  } catch (error) {
+    console.error('Error getting price quote:', error)
+    throw error
+  }
+}

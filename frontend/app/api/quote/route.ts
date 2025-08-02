@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
         queryParams.append(param, value)
       }
     })
-
-    const response = await fetch(`${ONEINCH_BASE_URL}/swap/v6.0/${chainId}/quote?${queryParams}`, {
+    console.log(`Fetching quote from 1inch: ${ONEINCH_BASE_URL}/swap/v6.1/${chainId}/quote?${queryParams}`)
+    const response = await fetch(`${ONEINCH_BASE_URL}/swap/v6.1/${chainId}/quote?${queryParams}`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'accept': 'application/json',
