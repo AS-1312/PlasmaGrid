@@ -110,7 +110,7 @@ export function getPopularTokens(tokens: OneInchToken[]): OneInchToken[] {
   const popularSymbols = [
     'ETH', 'WETH', 'USDT', 'USDC', 'DAI', 'WBTC', 'BTC',
     '1INCH', 'UNI', 'LINK', 'AAVE', 'COMP', 'MKR', 'SNX',
-    'MATIC', 'BNB', 'AVAX', 'FTM', 'CRV', 'SUSHI'
+    'WPOL', 'BNB', 'AVAX', 'FTM', 'CRV', 'SUSHI'
   ]
   
   const popularTokens = tokens.filter(token => 

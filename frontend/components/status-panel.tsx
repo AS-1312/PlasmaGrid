@@ -99,7 +99,7 @@ export function StatusPanel() {
       </Card>
 
       {/* Performance Metrics */}
-      <PerformanceMetrics />
+      {/* <PerformanceMetrics /> */}
 
       {/* Control Buttons */}
       <Card>
@@ -150,7 +150,7 @@ export function StatusPanel() {
       </Card>
 
       {/* Active Orders */}
-      <OrdersTable />
+      {/* <OrdersTable /> */}
     </div>
   )
 }

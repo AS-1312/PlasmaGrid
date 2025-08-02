@@ -14,13 +14,14 @@ import { OneInchToken, fetchWhitelistedTokens, searchTokens, getPopularTokens, S
 // Fallback tokens when API fails
 const FALLBACK_TOKENS: Record<number, OneInchToken[]> = {
   1: [ // Ethereum
-    { symbol: "ETH", name: "Ethereum", address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", decimals: 18 },
     { symbol: "USDT", name: "Tether USD", address: "0xdac17f958d2ee523a2206206994597c13d831ec7", decimals: 6 },
     { symbol: "USDC", name: "USD Coin", address: "0xa0b86a33e6ba5f69b37c9fcb6e1d6b1f3d3a3e3d", decimals: 6 },
-    { symbol: "WETH", name: "Wrapped Ethereum", address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", decimals: 18 },
+    { symbol: "WETH", name: "Wrapped Ethereum", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", decimals: 18 },
+    { symbol: "WPOL", name: "Polygon", address: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", decimals: 18 },
+
   ],
   137: [ // Polygon
-    { symbol: "MATIC", name: "Polygon", address: "0x0000000000000000000000000000000000001010", decimals: 18 },
+    { symbol: "WPOL", name: "Polygon", address: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", decimals: 18 },
     { symbol: "USDT", name: "Tether USD", address: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", decimals: 6 },
     { symbol: "USDC", name: "USD Coin", address: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", decimals: 6 },
   ],

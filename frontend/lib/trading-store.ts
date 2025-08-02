@@ -30,6 +30,11 @@ interface TradingStore {
   tokens: OneInchToken[]
   tokensLoading: boolean
 
+  // AI Suggestions
+  suggestionsLoading: boolean
+  suggestionsError: string | null
+  lastSuggestions: any | null
+
   // Orders & Performance
   orders: Order[]
   totalOrders: number
@@ -45,6 +50,7 @@ interface TradingStore {
   fetchRealPrice: (chainId: number) => Promise<void>
   loadTokens: (chainId: number) => Promise<void>
   tryFetchPrice: (chainId: number) => Promise<void>
+        getSuggestedTrades: () => Promise<void>
 }
 
 // Mock orders data
@@ -94,13 +100,10 @@ const mockOrders: Order[] = [
 // Fallback tokens when API fails - same as TokenSelect component
 const FALLBACK_TOKENS: Record<number, OneInchToken[]> = {
   1: [ // Ethereum
-    { symbol: "ETH", name: "Ethereum", address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", decimals: 18 },
-    { symbol: "USDT", name: "Tether USD", address: "0xdac17f958d2ee523a2206206994597c13d831ec7", decimals: 6 },
-    { symbol: "USDC", name: "USD Coin", address: "0xa0b86a33e6ba5f69b37c9fcb6e1d6b1f3d3a3e3d", decimals: 6 },
-    { symbol: "WETH", name: "Wrapped Ethereum", address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", decimals: 18 },
+    { symbol: "WETH", name: "Wrapped Ethereum", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", decimals: 18 },
   ],
   137: [ // Polygon
-    { symbol: "MATIC", name: "Polygon", address: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", decimals: 18 },
+    { symbol: "WPOL", name: "Polygon", address: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", decimals: 18 },
     { symbol: "USDT", name: "Tether USD", address: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", decimals: 6 },
     { symbol: "USDC", name: "USD Coin", address: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", decimals: 6 },
   ],
@@ -112,13 +115,16 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   uptime: "02:34:12",
   baseAsset: "ETH",
   quoteAsset: "USDT",
-  currentPrice: 2340.5,
+  currentPrice: 3340.5,
   priceLoading: false,
   priceError: null,
   baseTokenData: null,
   quoteTokenData: null,
   tokens: [],
   tokensLoading: false,
+  suggestionsLoading: false,
+  suggestionsError: null,
+  lastSuggestions: null,
   orders: mockOrders,
   totalOrders: mockOrders.length,
   filledOrders: mockOrders.filter((o) => o.status === "filled").length,
@@ -129,11 +135,9 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   setBotStatus: (status) => set({ botStatus: status }),
   setBaseAsset: (asset) => {
     set({ baseAsset: asset })
-    // Note: Price fetching will be triggered from the component with the current chainId
   },
   setQuoteAsset: (asset) => {
     set({ quoteAsset: asset })
-    // Note: Price fetching will be triggered from the component with the current chainId
   },
   updatePrice: (price) => set({ currentPrice: price }),
 
@@ -226,6 +230,53 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       const fallbackTokens = FALLBACK_TOKENS[chainId] || FALLBACK_TOKENS[1] || []
       set({ tokens: fallbackTokens, tokensLoading: false })
       console.log(`Using ${fallbackTokens.length} fallback tokens for chain ${chainId}`)
+    }
+  },
+
+  getSuggestedTrades: async () => {
+    const state = get()
+    const { currentPrice, baseAsset, quoteAsset } = state
+
+    if (!currentPrice || !baseAsset || !quoteAsset) {
+      set({ suggestionsError: 'Missing price or trading pair data' })
+      return
+    }
+
+    set({ suggestionsLoading: true, suggestionsError: null })
+
+    try {
+      console.log(`Getting AI suggestions for ${baseAsset}/${quoteAsset} at $${currentPrice}`)
+      
+      const response = await fetch('/api/suggest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPrice,
+          baseAsset,
+          quoteAsset
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `API error: ${response.status}`)
+      }
+
+      const suggestions = await response.json()
+      set({ 
+        lastSuggestions: suggestions,
+        suggestionsLoading: false 
+      })
+
+      console.log('AI suggestions received:', suggestions)
+    } catch (error) {
+      console.error('Failed to get AI suggestions:', error)
+      set({ 
+        suggestionsLoading: false,
+        suggestionsError: error instanceof Error ? error.message : 'Failed to get suggestions'
+      })
     }
   }
 }))

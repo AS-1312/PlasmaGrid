@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Network } from "lucide-react"
 import { useTradingStore } from "@/lib/trading-store"
-import { TelegramPanel } from "./telegram-panel"
+// import { TelegramPanel } from "./telegram-panel"
 import { WalletConnection } from "./wallet-connection"
 import { TokenSelect } from "@/components/ui/token-select"
 import { SUPPORTED_CHAINS, SupportedChain } from "@/lib/oneinch-api"
@@ -33,30 +33,38 @@ export function ConfigurationPanel() {
     priceLoading,
     priceError,
     tokensLoading,
+    suggestionsLoading,
+    suggestionsError,
+    lastSuggestions,
     setBaseAsset, 
     setQuoteAsset,
     tryFetchPrice,
-    loadTokens
+    loadTokens,
+    getSuggestedTrades
   } = useTradingStore()
 
   // Custom handlers that trigger price fetching with current chainId
   const handleBaseAssetChange = (asset: string) => {
     setBaseAsset(asset)
     if (quoteAsset && asset !== quoteAsset) {
-      tryFetchPrice(currentChainId)
+      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${chainId}`)
+      tryFetchPrice(chainId)
     }
   }
 
   const handleQuoteAssetChange = (asset: string) => {
     setQuoteAsset(asset)
     if (baseAsset && asset !== baseAsset) {
-      tryFetchPrice(currentChainId)
+      console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${chainId}`)
+
+      tryFetchPrice(chainId)
     }
   }
 
   // Map chainId to SupportedChain
   const getNetworkFromChainId = (chainId: number): SupportedChain => {
     const chainEntry = Object.entries(SUPPORTED_CHAINS).find(([_, id]) => id === chainId)
+    
     return (chainEntry?.[0] as SupportedChain) || "ethereum"
   }
 
@@ -65,15 +73,15 @@ export function ConfigurationPanel() {
 
   // Load tokens when component mounts or chain changes
   useEffect(() => {
-    loadTokens(currentChainId)
-  }, [currentChainId, loadTokens])
+    loadTokens(chainId)
+  }, [chainId, loadTokens])
 
   // Fetch real price when assets change or chain changes
   useEffect(() => {
     if (baseAsset && quoteAsset && baseAsset !== quoteAsset) {
-      tryFetchPrice(currentChainId)
+      tryFetchPrice(chainId)
     }
-  }, [baseAsset, quoteAsset, currentChainId, tryFetchPrice])
+  }, [baseAsset, quoteAsset, chainId, tryFetchPrice])
 
   // Update min/max prices based on current price (±5% range)
   useEffect(() => {
@@ -163,13 +171,105 @@ export function ConfigurationPanel() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Min Price ($)</Label>
-                <Input type="number" placeholder="2200" />
+                <Input 
+                  type="number" 
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder={currentPrice ? (currentPrice * 0.95).toFixed(2) : "2200"} 
+                />
+                <p className="text-xs text-muted-foreground">Auto-set to -5% of current price</p>
               </div>
               <div className="space-y-2">
                 <Label>Max Price ($)</Label>
-                <Input type="number" placeholder="2500" />
+                <Input 
+                  type="number" 
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder={currentPrice ? (currentPrice * 1.05).toFixed(2) : "2500"} 
+                />
+                <p className="text-xs text-muted-foreground">Auto-set to +5% of current price</p>
               </div>
             </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  if (currentPrice && !priceLoading && !priceError) {
+                    setMinPrice((currentPrice * 0.95).toFixed(2))
+                    setMaxPrice((currentPrice * 1.05).toFixed(2))
+                  }
+                }}
+                disabled={!currentPrice || priceLoading || !!priceError}
+              >
+                Reset Price ±5%
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={getSuggestedTrades}
+                disabled={!currentPrice || priceLoading || !!priceError || suggestionsLoading}
+              >
+                {suggestionsLoading ? "Getting AI Suggestions..." : "AI Suggest Trades"}
+              </Button>
+            </div>
+
+            {/* AI Suggestions Display */}
+            {(suggestionsError || lastSuggestions) && (
+              <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+                <h4 className="text-sm font-medium mb-3">AI Trading Suggestions</h4>
+                
+                {suggestionsError && (
+                  <div className="text-red-500 text-sm mb-2">
+                    Error: {suggestionsError}
+                  </div>
+                )}
+                
+                {lastSuggestions && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Market Sentiment:</span>
+                      <span className={`text-sm px-2 py-1 rounded ${
+                        lastSuggestions.marketSentiment === 'bullish' ? 'bg-green-100 text-green-700' :
+                        lastSuggestions.marketSentiment === 'bearish' ? 'bg-red-100 text-red-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {lastSuggestions.marketSentiment?.toUpperCase()}
+                      </span>
+                    </div>
+                    
+                    {lastSuggestions.reasoning && (
+                      <p className="text-xs text-muted-foreground">
+                        {lastSuggestions.reasoning}
+                      </p>
+                    )}
+                    
+                    {lastSuggestions.gridTrades && lastSuggestions.gridTrades.length > 0 && (
+                      <div className="space-y-2">
+                        <h5 className="text-xs font-medium">Suggested Orders:</h5>
+                        <div className="grid gap-2">
+                          {lastSuggestions.gridTrades.map((trade: any, index: number) => (
+                            <div key={index} className="flex items-center justify-between text-xs p-2 bg-background rounded border">
+                              <div className="flex items-center space-x-2">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  trade.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {trade.type?.toUpperCase()}
+                                </span>
+                                <span>${trade.price}</span>
+                                <span>{trade.amount} {baseAsset}</span>
+                              </div>
+                              <span className="text-muted-foreground">{trade.reason}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
          
 
@@ -263,7 +363,7 @@ export function ConfigurationPanel() {
       </Card>
 
       {/* Telegram Integration */}
-      <TelegramPanel />
+      {/* <TelegramPanel /> */}
     </div>
   )
 }
