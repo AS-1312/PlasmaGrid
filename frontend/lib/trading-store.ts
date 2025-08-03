@@ -87,46 +87,46 @@ interface TradingStore {
 
 // Mock orders data
 const mockOrders: Order[] = [
-  {
-    id: "1",
-    type: "buy",
-    price: 2320,
-    amount: 0.1,
-    status: "pending",
-    timestamp: new Date(),
-  },
-  {
-    id: "2",
-    type: "sell",
-    price: 2380,
-    amount: 0.1,
-    status: "filled",
-    timestamp: new Date(),
-  },
-  {
-    id: "3",
-    type: "buy",
-    price: 2300,
-    amount: 0.1,
-    status: "filled",
-    timestamp: new Date(),
-  },
-  {
-    id: "4",
-    type: "sell",
-    price: 2400,
-    amount: 0.1,
-    status: "pending",
-    timestamp: new Date(),
-  },
-  {
-    id: "5",
-    type: "buy",
-    price: 2280,
-    amount: 0.1,
-    status: "cancelled",
-    timestamp: new Date(),
-  },
+  // {
+  //   id: "1",
+  //   type: "buy",
+  //   price: 2320,
+  //   amount: 0.1,
+  //   status: "pending",
+  //   timestamp: new Date(),
+  // },
+  // {
+  //   id: "2",
+  //   type: "sell",
+  //   price: 2380,
+  //   amount: 0.1,
+  //   status: "filled",
+  //   timestamp: new Date(),
+  // },
+  // {
+  //   id: "3",
+  //   type: "buy",
+  //   price: 2300,
+  //   amount: 0.1,
+  //   status: "filled",
+  //   timestamp: new Date(),
+  // },
+  // {
+  //   id: "4",
+  //   type: "sell",
+  //   price: 2400,
+  //   amount: 0.1,
+  //   status: "pending",
+  //   timestamp: new Date(),
+  // },
+  // {
+  //   id: "5",
+  //   type: "buy",
+  //   price: 2280,
+  //   amount: 0.1,
+  //   status: "cancelled",
+  //   timestamp: new Date(),
+  // },
 ]
 
 // Fallback tokens when API fails - same as TokenSelect component
@@ -406,31 +406,7 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
         signingOrders: false,
         submittingOrders: true 
       })
-
-      // Step 2: For now, we'll simulate signing and submission
-      // In a real implementation, you would:
-      // 1. Get the signer from wagmi
-      // 2. Sign each order with the user's wallet
-      // 3. Submit to 1inch API
       
-      console.log('1inch Limit orders created:', ordersWithLimitOrders)
-      console.log('Note: Real signing and submission requires user wallet interaction')
-
-      // Simulate submission delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      // Update status to submitted (simulated)
-      const submittedOrders = ordersWithLimitOrders.map(order => ({
-        ...order,
-        status: 'submitted' as const
-      }))
-
-      set({ 
-        limitOrders: submittedOrders,
-        submittingOrders: false 
-      })
-
-      console.log(`Successfully prepared ${submittedOrders.length} limit orders for 1inch`)
 
     } catch (error) {
       console.error('Failed to sign and submit orders:', error)

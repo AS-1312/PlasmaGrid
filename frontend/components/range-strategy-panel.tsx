@@ -224,7 +224,7 @@ export function RangeStrategyPanel() {
                 {suggestionsLoading ? "Getting AI Suggestions..." : "AI Suggest Trades"}
               </Button>
             </div>
-
+                  
             {/* AI Suggestions Display */}
             {(suggestionsError || lastSuggestions) && (
               <div className="mt-4 p-4 border rounded-lg bg-muted/30">

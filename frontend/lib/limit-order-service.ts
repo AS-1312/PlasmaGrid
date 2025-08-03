@@ -1,5 +1,7 @@
-import { LimitOrder, MakerTraits, Address, randBigInt } from "@1inch/limit-order-sdk"
-import { ethers } from "ethers"
+import { LimitOrder, MakerTraits, Address, Api, randBigInt } from "@1inch/limit-order-sdk"
+
+import { ethers, Wallet } from "ethers"
+import { FetchProviderConnector } from './FetchProvider'
 
 export interface GridTrade {
   id: string
@@ -21,6 +23,10 @@ export interface LimitOrderCreationParams {
   chainId: number
   expirationMinutes?: number
 }
+ const privKey =
+        ''
+    const authKey = process.env.ONEINCH_API_KEY;
+    const maker = new Wallet(privKey)
 
 export class LimitOrderService {
   private static instance: LimitOrderService
@@ -45,7 +51,7 @@ export class LimitOrderService {
     // Generate random nonce (up to uint40 max)
     const UINT_40_MAX = BigInt((2 ** 40) - 1)
     const nonce = randBigInt(UINT_40_MAX)
-
+   
     // Create maker traits with expiration and nonce
     const makerTraits = MakerTraits.default()
       .withExpiration(expiration)
@@ -93,7 +99,9 @@ export class LimitOrderService {
       price: trade.price,
       amount: trade.amount,
       makingAmount: makingAmount.toString(),
-      takingAmount: takingAmount.toString()
+      takingAmount: takingAmount.toString(),
+      makerTraits: makerTraits,
+      chainId: chainId
     })
 
     // Create the limit order
@@ -106,7 +114,7 @@ export class LimitOrderService {
       makingAmount,
       takingAmount
     }, makerTraits)
-
+    
     return order
   }
 
@@ -198,17 +206,8 @@ export class LimitOrderService {
       // Call our API route which handles the 1inch API call server-side
       const response = await fetch(apiUrl)
       
-      if (!response.ok) {
-        console.error(`Orders API error: ${response.status} ${response.statusText}`)
-        return this.getMockOrders(makerAddress)
-      }
       
       const data = await response.json()
-      
-      if (!data.success) {
-        console.error('Orders API returned error:', data.error)
-        return this.getMockOrders(makerAddress)
-      }
       
       console.log(`Fetched ${data.orders.length} orders (source: ${data.source})`)
       return data.orders
@@ -219,47 +218,6 @@ export class LimitOrderService {
     }
   }
 
-  /**
-   * Generate mock orders when API is unavailable
-   */
-  private getMockOrders(makerAddress: string): any[] {
-    return [
-      {
-        orderHash: '0x' + Math.random().toString(16).substr(2, 40),
-        signature: '0x' + Math.random().toString(16).substr(2, 130),
-        data: {
-          maker: makerAddress,
-          makerAsset: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270', // WPOL on Polygon
-          takerAsset: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', // USDT on Polygon
-          makingAmount: ethers.parseUnits('0.1', 18).toString(),
-          takingAmount: ethers.parseUnits('234.5', 6).toString(),
-          salt: randBigInt(32).toString(),
-        },
-        status: Math.random() > 0.5 ? 'pending' : 'filled',
-        createdAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-        price: 2345,
-        amount: 0.1,
-        type: 'sell' as const
-      },
-      {
-        orderHash: '0x' + Math.random().toString(16).substr(2, 40),
-        signature: '0x' + Math.random().toString(16).substr(2, 130),
-        data: {
-          maker: makerAddress,
-          makerAsset: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', // USDT on Polygon  
-          takerAsset: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270', // WPOL on Polygon
-          makingAmount: ethers.parseUnits('232.0', 6).toString(),
-          takingAmount: ethers.parseUnits('0.1', 18).toString(),
-          salt: randBigInt(32).toString(),
-        },
-        status: Math.random() > 0.5 ? 'pending' : 'filled',
-        createdAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-        price: 2320,
-        amount: 0.1,
-        type: 'buy' as const
-      }
-    ]
-  }
 
   /**
    * Map 1inch order status to our format
@@ -346,17 +304,14 @@ export class LimitOrderService {
       chainId
     })
 
-    // In a real implementation, you would:
-    // 1. Use the 1inch API SDK with your API key
-    // 2. Submit the order to the 1inch limit order protocol
-    // 3. Handle the response and update order status
-    
+
+
     // Example implementation would look like:
-    // const api = new Api({
-    //   networkId: chainId,
-    //   authKey: 'your-1inch-api-key',
-    //   httpConnector: new FetchProviderConnector()
-    // })
+    const api = new Api({
+      networkId: chainId,
+      authKey: 'your-1inch-api-key',
+      httpConnector: new FetchProviderConnector()
+    })
     // await api.submitOrder(order, signature)
     
     // Simulated submission delay
