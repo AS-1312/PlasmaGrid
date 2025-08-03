@@ -61,14 +61,13 @@ function WalletConnectionContent() {
 
   // Debug logging
   useEffect(() => {
-    console.log('Wallet state:', { address, isConnected, isConnecting, isPending, connectors: connectors?.length })
   }, [address, isConnected, isConnecting, isPending, connectors])
 
   const handleConnect = async (connector: any) => {
     try {
       await connect({ connector })
     } catch (err) {
-      console.error('Connect error:', err)
+      // Connect error handled
     }
   }
 
@@ -76,7 +75,7 @@ function WalletConnectionContent() {
     try {
       await disconnect()
     } catch (err) {
-      console.error('Disconnect error:', err)
+      // Disconnect error handled
     }
   }
 

@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.ONEINCH_API_KEY
 
   if (!apiKey) {
-    console.error('1inch API key not configured')
     return NextResponse.json(
       { error: 'API key not configured' },
       { status: 500 }
@@ -60,7 +59,6 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Error fetching swap from 1inch:', error)
     return NextResponse.json(
       { error: 'Failed to fetch swap data' },
       { status: 500 }

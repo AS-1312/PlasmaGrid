@@ -111,7 +111,6 @@ export function validateOrderBalance(
  */
 export async function fetchOrdersByMaker(makerAddress: string, currentPrice?: number): Promise<Order[]> {
   try {
-    console.log('🔍 Fetching orders for maker:', makerAddress, 'currentPrice:', currentPrice)
     
     const params = new URLSearchParams({
       maker: makerAddress,
@@ -126,47 +125,23 @@ export async function fetchOrdersByMaker(makerAddress: string, currentPrice?: nu
     const response = await fetch(`/api/orders?${params.toString()}`)
     
     if (!response.ok) {
-      console.error('❌ API response not ok:', response.status, response.statusText)
       const errorText = await response.text()
-      console.error('❌ Error response body:', errorText)
       throw new Error(`Failed to fetch orders: ${response.status} ${response.statusText}`)
     }
     
     const data = await response.json()
-    console.log('✅ Orders API response:', {
-      status: data.status,
-      ordersCount: data.orders?.length || 0,
-      hasErrors: !!data.error,
-      source: data.source || 'unknown'
-    })
     
     if (data.error) {
-      console.error('❌ API returned error:', data.error)
       throw new Error(data.error)
     }
     
     if (!data.orders || !Array.isArray(data.orders)) {
-      console.warn('⚠️ No orders in response or invalid format')
       return []
-    }
-    
-    console.log('✅ Successfully fetched', data.orders.length, 'orders from', data.source || '1inch API')
-    
-    // Log first few orders for debugging
-    if (data.orders.length > 0) {
-      console.log('📋 Sample orders:', data.orders.slice(0, 2).map((order: any) => ({
-        id: order.id,
-        price: order.price,
-        amount: order.amount,
-        side: order.side,
-        status: order.status
-      })))
     }
     
     return data.orders
     
   } catch (error) {
-    console.error('❌ Error in fetchOrdersByMaker:', error)
     throw error // Re-throw to let the caller handle it
   }
 }
@@ -226,7 +201,6 @@ export class OneInchOrderManager {
   async submitOrderToOneInch(orderData: any, signature: string): Promise<{ success: boolean; hash?: string; error?: string }> {
     // This would integrate with the actual 1inch API
     // For now, we'll simulate the process
-    console.log('Would submit order to 1inch:', { orderData, signature })
     
     return {
       success: true,

@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.ONEINCH_API_KEY
 
   if (!apiKey) {
-    console.error('1inch API key not configured')
     return NextResponse.json(
       { error: 'API key not configured' },
       { status: 500 }
@@ -43,8 +42,10 @@ export async function GET(request: NextRequest) {
         queryParams.append(param, value)
       }
     })
-    console.log(`Fetching quote from 1inch: ${ONEINCH_BASE_URL}/swap/v6.1/${chainId}/quote?${queryParams}`)
-    const response = await fetch(`${ONEINCH_BASE_URL}/swap/v6.1/${chainId}/quote?${queryParams}`, {
+    
+    const apiUrl = `${ONEINCH_BASE_URL}/swap/v6.1/${chainId}/quote?${queryParams}`
+    
+    const response = await fetch(apiUrl, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'accept': 'application/json',
@@ -60,9 +61,15 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Error fetching quote from 1inch:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch quote data' },
+      { 
+        error: 'Failed to fetch quote data',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        chainId,
+        src,
+        dst,
+        amount
+      },
       { status: 500 }
     )
   }

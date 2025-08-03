@@ -74,7 +74,7 @@ export function HotWalletPanel() {
       const balance = await hotWalletManager.getTokenBalance(nativeAddress, chainId)
       setNativeTokenBalance(balance)
     } catch (error) {
-      console.error("Failed to fetch native token balance:", error)
+      // Failed to fetch native token balance
       setNativeTokenBalance("0")
     }
   }

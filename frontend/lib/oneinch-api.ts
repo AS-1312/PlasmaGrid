@@ -181,10 +181,36 @@ export async function getSwapQuote(
       })
     }
 
+    console.log('🔍 getSwapQuote Debug:', {
+      endpoint: `/api/quote?${queryParams}`,
+      chainId,
+      src,
+      dst,
+      amount
+    })
+
     const response = await fetch(`/api/quote?${queryParams}`)
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch quote: ${response.status}`)
+      const errorText = await response.text()
+      console.error('❌ Quote API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+        chainId,
+        src,
+        dst,
+        amount
+      })
+      
+      let errorData
+      try {
+        errorData = JSON.parse(errorText)
+      } catch {
+        errorData = { error: errorText }
+      }
+      
+      throw new Error(`Failed to fetch quote: ${response.status} - ${errorData.details || errorData.error || 'Unknown error'}`)
     }
     
     return await response.json()

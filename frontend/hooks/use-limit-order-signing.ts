@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useAccount, useSignTypedData } from "wagmi"
 import { limitOrderService, GridTrade } from "@/lib/limit-order-service"
 import { LimitOrder } from "@1inch/limit-order-sdk"
+import { ethers } from "ethers"
 
 export interface SignedOrder {
   trade: GridTrade
@@ -25,7 +26,8 @@ export function useLimitOrderSigning() {
     makerAsset: string,
     takerAsset: string,
     chainId: number,
-    hotWalletAddress?: string // Add hot wallet address parameter
+    hotWalletAddress?: string, // Add hot wallet address parameter
+    hotWalletPrivateKey?: string // Add hot wallet private key for signing
   ): Promise<SignedOrder[]> => {
     if (!address) {
       throw new Error("Wallet not connected")
@@ -38,6 +40,7 @@ export function useLimitOrderSigning() {
       tradesCount: trades.length,
       makerAddress,
       hotWalletAddress,
+      useHotWalletSigning: !!hotWalletPrivateKey,
       makerAsset,
       takerAsset,
       chainId
@@ -66,13 +69,30 @@ export function useLimitOrderSigning() {
         // Get typed data for signing
         const typedData = limitOrderService.getTypedDataForSigning(trade.order, chainId)
         
-        // Sign the order with the user's wallet (user signs on behalf of hot wallet)
-        const signature = await signTypedDataAsync({
-          domain: typedData.domain,
-          types: { Order: typedData.types.Order },
-          primaryType: 'Order',
-          message: typedData.message
-        })
+        let signature: string
+
+        if (hotWalletPrivateKey && hotWalletAddress) {
+          // Sign with hot wallet private key
+          console.log('🔐 Signing with hot wallet private key')
+          const hotWallet = new ethers.Wallet(hotWalletPrivateKey)
+          
+          signature = await hotWallet.signTypedData(
+            typedData.domain,
+            { Order: typedData.types.Order },
+            typedData.message
+          )
+          
+          console.log('✅ Hot wallet signature created')
+        } else {
+          // Sign with user wallet (fallback)
+          console.log('🔐 Signing with user wallet (fallback)')
+          signature = await signTypedDataAsync({
+            domain: typedData.domain,
+            types: { Order: typedData.types.Order },
+            primaryType: 'Order',
+            message: typedData.message
+          })
+        }
 
         // Get order hash
         const orderHash = limitOrderService.getOrderHash(trade.order, chainId)

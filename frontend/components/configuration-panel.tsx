@@ -52,7 +52,6 @@ export function ConfigurationPanel() {
     setBaseAsset(asset)
     if (quoteAsset && asset !== quoteAsset) {
       console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${currentChainId}`)
-      tryFetchPrice(currentChainId)
     }
   }
 
@@ -60,8 +59,6 @@ export function ConfigurationPanel() {
     setQuoteAsset(asset)
     if (baseAsset && asset !== baseAsset) {
       console.log(`Fetching price for ${asset}/${quoteAsset} on chain ${currentChainId}`)
-
-      tryFetchPrice(currentChainId)
     }
   }
 
@@ -153,7 +150,23 @@ export function ConfigurationPanel() {
       const quoteExists = tokens.find(t => t.symbol.toLowerCase() === quoteAsset.toLowerCase())
       
       if (baseExists && quoteExists) {
-        tryFetchPrice(currentChainId)
+        console.log(`🔄 useEffect Price Fetch: ${baseAsset}/${quoteAsset} on chain ${currentChainId}`)
+        console.log(`🔍 Token addresses: base=${baseExists.address}, quote=${quoteExists.address}`)
+        
+        // Add a small delay to avoid race conditions with rapid chain switches
+        const timeoutId = setTimeout(() => {
+          tryFetchPrice(currentChainId)
+        }, 100)
+        
+        return () => clearTimeout(timeoutId)
+      } else {
+        console.log(`⚠️ Skipping price fetch - tokens not found on chain ${currentChainId}:`, {
+          baseAsset,
+          baseExists: !!baseExists,
+          quoteAsset, 
+          quoteExists: !!quoteExists,
+          availableTokens: tokens.map(t => t.symbol).join(', ')
+        })
       }
     }
   }, [baseAsset, quoteAsset, currentChainId, tokens, tryFetchPrice])

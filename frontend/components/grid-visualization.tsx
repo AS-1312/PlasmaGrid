@@ -33,13 +33,6 @@ export function GridVisualization() {
     const levels = 20
     const priceStep = priceRange / levels
     
-    console.log('Creating grid data with:', {
-      basePrice,
-      currentPrice,
-      gridOrdersCount: gridOrders.length,
-      gridOrders: gridOrders.slice(0, 3) // Log first 3 orders for debugging
-    })
-    
     return Array.from({ length: levels }, (_, i) => {
       const price = Math.round((basePrice - (priceRange / 2)) + (i * priceStep))
       const isCurrent = Math.abs(price - basePrice) < priceStep / 2
@@ -48,18 +41,11 @@ export function GridVisualization() {
       const ordersAtLevel = gridOrders.filter(order => {
         const orderPrice = order.price || 0
         const matches = Math.abs(orderPrice - price) < priceStep / 2
-        if (matches) {
-          console.log(`Found order at level ${price}:`, order)
-        }
         return matches
       })
       
       const buyOrders = ordersAtLevel.filter(o => o.type === 'buy')
       const sellOrders = ordersAtLevel.filter(o => o.type === 'sell')
-      
-      if (ordersAtLevel.length > 0) {
-        console.log(`Price level ${price}: ${buyOrders.length} buy, ${sellOrders.length} sell orders`)
-      }
       
       return {
         price,

@@ -63,8 +63,6 @@ Return the response in this exact JSON format:
   "reasoning": "Explanation of market analysis"
 }`
 
-    console.log('Sending request to OpenRouter...')
-    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -92,7 +90,6 @@ Return the response in this exact JSON format:
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('OpenRouter API error:', response.status, errorText)
       return NextResponse.json(
         { error: `OpenRouter API error: ${response.status} ${response.statusText}` },
         { status: response.status }
@@ -100,7 +97,6 @@ Return the response in this exact JSON format:
     }
 
     const data = await response.json()
-    console.log('OpenRouter response:', data)
 
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       return NextResponse.json(
@@ -122,9 +118,6 @@ Return the response in this exact JSON format:
 
       return NextResponse.json(suggestedTrades)
     } catch (parseError) {
-      console.error('Failed to parse AI response:', parseError)
-      console.error('AI Response:', aiResponse)
-      
       return NextResponse.json(
         { 
           error: 'Failed to parse AI response', 
@@ -136,7 +129,6 @@ Return the response in this exact JSON format:
     }
 
   } catch (error) {
-    console.error('Error in suggest API:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }

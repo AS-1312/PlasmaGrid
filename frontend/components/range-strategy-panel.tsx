@@ -10,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { useTradingStore } from "@/lib/trading-store"
 import { useLimitOrderSigning } from "@/hooks/use-limit-order-signing"
+import { useToast } from "@/hooks/use-toast"
 
 export function RangeStrategyPanel() {
   const chainId = useChainId()
   const { address: walletAddress } = useAccount()
+  const { toast } = useToast()
   const [gridLevels, setGridLevels] = useState([20])
   const [minPrice, setMinPrice] = useState<string>("")
   const [maxPrice, setMaxPrice] = useState<string>("")
@@ -31,6 +33,7 @@ export function RangeStrategyPanel() {
   const { 
     currentPrice, 
     baseAsset, 
+    quoteAsset,
     priceLoading,
     priceError,
     getSuggestedTrades,
@@ -47,7 +50,9 @@ export function RangeStrategyPanel() {
     baseTokenData,
     quoteTokenData,
     getHotWalletBalance,
-    hotWallet
+    hotWallet,
+    loadTokens,
+    tryFetchPrice
   } = useTradingStore()
 
   // Get base token balance from hot wallet
@@ -86,6 +91,18 @@ export function RangeStrategyPanel() {
     }
   }
 
+  // Auto-load tokens when component mounts or chainId/assets change
+  useEffect(() => {
+    if (chainId && baseAsset && quoteAsset) {
+      loadTokens(chainId).then(() => {
+        // Try to fetch price after tokens are loaded
+        tryFetchPrice(chainId)
+      }).catch(err => {
+        // Failed to load tokens
+      })
+    }
+  }, [chainId, baseAsset, quoteAsset, loadTokens, tryFetchPrice])
+
   // Check if there's sufficient balance for the suggested trades
   const hasSufficientBalance = (): boolean => {
     if (!lastSuggestions?.gridTrades || !baseTokenData) return false
@@ -121,24 +138,36 @@ export function RangeStrategyPanel() {
 
   // Handle signing and submitting orders with 1inch SDK
   const handleSignAndSubmitOrders = async () => {
-    if (!chainId || !walletAddress || !baseTokenData || !quoteTokenData || !hotWallet) {
-      console.error("Missing required data for signing orders")
+    if (!chainId) {
+      return
+    }
+    if (!walletAddress) {
+      return
+    }
+    if (!baseTokenData) {
+      return
+    }
+    if (!quoteTokenData) {
+      return
+    }
+    if (!hotWallet) {
+      return
+    }
+    if (limitOrders.length === 0) {
       return
     }
 
     try {
       resetSigning()
       
-      console.log('Creating limit orders with hot wallet:', hotWallet.address)
-      console.log('Orders to create:', limitOrders)
-      
-      // Step 1: Sign the limit orders using hot wallet address (not user wallet!)
+      // Step 1: Sign the limit orders using hot wallet address AND private key
       const signedOrders = await signLimitOrders(
         limitOrders,
         baseTokenData.address,
         quoteTokenData.address,
         chainId,
-        hotWallet.address // Use hot wallet address as maker!
+        hotWallet.address, // Use hot wallet address as maker
+        hotWallet.privateKey // Use hot wallet private key for signing
       )
 
       // Step 2: Submit the signed orders to 1inch
@@ -150,10 +179,20 @@ export function RangeStrategyPanel() {
         status: 'submitted' as const
       }))
       
-      console.log("Orders successfully signed and submitted:", updatedOrders)
+      // Show success notification
+      toast({
+        title: "🎉 Orders Submitted Successfully!",
+        description: `${updatedOrders.length} limit orders have been signed and submitted to 1inch. Your grid trading strategy is now active.`,
+        variant: "default",
+      })
 
     } catch (error) {
-      console.error("Failed to sign and submit orders:", error)
+      // Show error notification
+      toast({
+        title: "❌ Order Submission Failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred while submitting orders.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -316,6 +355,11 @@ export function RangeStrategyPanel() {
                           </div>
                         )}
                         
+                        {/* Debug: Show button visibility condition */}
+                        <div className="text-xs text-gray-500 mb-2">
+                          Debug: limitOrders.length = {limitOrders.length}, walletAddress = {walletAddress ? 'connected' : 'not connected'}
+                        </div>
+                        
                         {limitOrders.length > 0 && (
                           <div className="space-y-2">
                             <div className="text-xs text-blue-600 dark:text-blue-400 mb-2">
@@ -328,7 +372,13 @@ export function RangeStrategyPanel() {
                               <Button 
                                 variant="default" 
                                 size="sm"
-                                onClick={handleSignAndSubmitOrders}
+                                onClick={async () => {
+                                  try {
+                                    await handleSignAndSubmitOrders()
+                                  } catch (error) {
+                                    alert('Error: ' + (error instanceof Error ? error.message : String(error)))
+                                  }
+                                }}
                                 disabled={isSigningOrders || signingOrders || submittingOrders || !walletAddress}
                               >
                                 {isSigningOrders ? "Signing..." : signingOrders ? "Signing..." : submittingOrders ? "Submitting..." : "Sign & Submit Orders"}
